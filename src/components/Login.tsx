@@ -90,6 +90,55 @@ export function Login({ onLogin }: LoginProps) {
         }
     };
 
+    const handleWindowsHello = async () => {
+        try {
+            setIsLoading(true);
+            setErrorMsg('');
+            const challenge = new Uint8Array(32);
+            window.crypto.getRandomValues(challenge);
+            
+            const isRegistered = localStorage.getItem('windows_hello_registered') === 'true';
+            
+            if (isRegistered) {
+                // Login con Windows Hello
+                const assertion = await navigator.credentials.get({
+                    publicKey: {
+                        challenge,
+                        userVerification: "required"
+                    }
+                });
+                if (assertion) onLogin();
+            } else {
+                // Vincular Windows Hello por primera vez
+                const cred = await navigator.credentials.create({
+                    publicKey: {
+                        challenge,
+                        rp: { name: "Registro Notas MEP" },
+                        user: {
+                            id: window.crypto.getRandomValues(new Uint8Array(16)),
+                            name: email || "Docente Local",
+                            displayName: "Docente Administrador"
+                        },
+                        pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+                        authenticatorSelection: {
+                            authenticatorAttachment: "platform",
+                            userVerification: "required"
+                        },
+                        timeout: 60000
+                    }
+                });
+                if (cred) {
+                    localStorage.setItem('windows_hello_registered', 'true');
+                    onLogin();
+                }
+            }
+        } catch (e: any) {
+            setErrorMsg('Operación de Windows Hello cancelada o no soportada.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const toggleMode = (e: React.MouseEvent) => {
         e.preventDefault();
         if (accountExists) return; // Bloquear toggle si ya existe cuenta
@@ -285,7 +334,7 @@ export function Login({ onLogin }: LoginProps) {
                                 placeholder="........"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                required
+                                required={!localStorage.getItem('windows_hello_registered')}
                                 disabled={isLoading}
                                 style={{
                                     width: '100%',
@@ -339,6 +388,51 @@ export function Login({ onLogin }: LoginProps) {
                                 )}
                             </button>
                         </div>
+                        
+                        {!isRegistering && accountExists && (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
+                                <button
+                                    type="button"
+                                    onClick={handleWindowsHello}
+                                    disabled={isLoading}
+                                    style={{
+                                        background: 'rgba(255, 255, 255, 0.03)',
+                                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                                        borderRadius: '20px',
+                                        padding: '0.35rem 0.8rem',
+                                        color: '#a78bfa',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '500',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.4rem',
+                                        cursor: isLoading ? 'not-allowed' : 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        opacity: isLoading ? 0.6 : 1
+                                    }}
+                                    onMouseOver={(e) => {
+                                        if (!isLoading) {
+                                            e.currentTarget.style.background = 'rgba(167, 139, 250, 0.08)';
+                                            e.currentTarget.style.borderColor = 'rgba(167, 139, 250, 0.3)';
+                                        }
+                                    }}
+                                    onMouseOut={(e) => {
+                                        if (!isLoading) {
+                                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                                            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                                        }
+                                    }}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                    </svg>
+                                    {localStorage.getItem('windows_hello_registered') === 'true' 
+                                        ? 'Entrar con PIN de Windows' 
+                                        : 'Vincular PIN de Windows'}
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <button
