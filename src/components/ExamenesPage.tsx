@@ -1,135 +1,175 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { Database } from '../types/database';
+import { sqliteService } from '../lib/sqliteService';
 import { useToast } from './Toast';
 import { ExamenSummary } from './ExamenSummary';
-import { SupabaseClient } from '@supabase/supabase-js';
 
-const typedSupabase = supabase as SupabaseClient<Database>;
-
-type Examen = Database['public']['Tables']['examenes']['Row'];
-type IndicadorExamen = Database['public']['Tables']['indicadores_examen']['Row'];
-type Estudiante = Database['public']['Tables']['estudiantes']['Row'];
-type EvaluacionExamen = Database['public']['Tables']['evaluaciones_examen']['Row'];
+interface Examen {
+    id: number;
+    nombre: string;
+    seccion_id: string;
+    porcentaje: number;
+    puntos_totales: number;
+    periodo: number;
+}
+interface IndicadorExamen {
+    id: number;
+    examen_id: number;
+    titulo: string;
+    orden: number;
+    desc_0: string | null;
+    desc_1: string | null;
+    desc_2: string | null;
+    desc_3: string | null;
+}
+interface Estudiante {
+    cedula: string;
+    nombre: string;
+    apellidos: string;
+    seccion_id: string;
+}
 
 interface Props {
     periodo: number;
 }
 
 export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
-    const [secciones, setSecciones] = useState<Database['public']['Tables']['secciones']['Row'][]>([]);
+    const [secciones, setSecciones] = useState<any[]>([]);
     const [selectedSeccion, setSelectedSeccion] = useState<string>('');
     const [examenes, setExamenes] = useState<Examen[]>([]);
     const [selectedExamen, setSelectedExamen] = useState<string>('');
     const [indicadores, setIndicadores] = useState<IndicadorExamen[]>([]);
     const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
     const [evaluaciones, setEvaluaciones] = useState<Record<string, Record<string, number>>>({});
-    const [loading, setLoading] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
+    const [notasFinalesDirectas, setNotasFinalesDirectas] = useState<Record<string, string>>({});
+    const [isLoadingData, setIsLoadingData] = useState(false);  // Solo para la tabla de evaluaciones
+    const [isSaving, setIsSaving] = useState(false);             // Solo para guardar/crear
     const [showManager, setShowManager] = useState(false);
     const [showSummary, setShowSummary] = useState(false);
     const { showToast } = useToast();
 
-    // Manager state
     const [editNombre, setEditNombre] = useState('');
     const [editPorcentaje, setEditPorcentaje] = useState<number>(25);
     const [editPuntosTotales, setEditPuntosTotales] = useState<number>(30);
-    const [editIndicadores, setEditIndicadores] = useState<{ titulo: string, d0: string, d1: string, d2: string, d3: string }[]>([]);
+    const [editIndicadores, setEditIndicadores] = useState<{ titulo: string; d0: string; d1: string; d2: string; d3: string }[]>([]);
 
-    useEffect(() => {
-        fetchInitialData();
-    }, []);
-
+    useEffect(() => { fetchInitialData(); }, []);
     useEffect(() => {
         if (selectedSeccion) {
             fetchExamenes(selectedSeccion);
             fetchEstudiantes(selectedSeccion);
         }
     }, [selectedSeccion, periodo]);
-
     useEffect(() => {
+        let isMounted = true;
         if (selectedExamen) {
-            fetchIndicadoresAndEvaluations(selectedExamen);
+            fetchIndicadoresAndEvaluations(selectedExamen, isMounted);
         } else {
             setIndicadores([]);
             setEvaluaciones({});
         }
+        return () => { isMounted = false; };
     }, [selectedExamen]);
 
     async function fetchInitialData() {
-        const { data } = await typedSupabase.from('secciones').select('*').order('nombre');
+        const { data } = await sqliteService.query('SELECT * FROM secciones ORDER BY nombre');
         setSecciones(data || []);
         if (data && data.length > 0) setSelectedSeccion(data[0].id);
     }
 
     async function fetchExamenes(seccionId: string) {
-        const { data } = await typedSupabase.from('examenes').select('*').eq('seccion_id', seccionId).eq('periodo', periodo).order('id');
+        const { data } = await sqliteService.query(
+            'SELECT * FROM examenes WHERE seccion_id = ? AND periodo = ? ORDER BY id',
+            [seccionId, periodo]
+        );
         setExamenes(data || []);
         if (data && data.length > 0) setSelectedExamen(String(data[0].id));
         else setSelectedExamen('');
     }
 
     async function fetchEstudiantes(seccionId: string) {
-        const { data } = await typedSupabase.from('estudiantes').select('*').eq('seccion_id', seccionId).order('apellidos');
+        const { data } = await sqliteService.query(
+            'SELECT * FROM estudiantes WHERE seccion_id = ? ORDER BY apellidos',
+            [seccionId]
+        );
         setEstudiantes(data || []);
     }
 
-    async function fetchIndicadoresAndEvaluations(examenId: string) {
-        setLoading(true);
-        const { data: indData } = await typedSupabase.from('indicadores_examen').select('*').eq('examen_id', parseInt(examenId)).order('orden');
-        setIndicadores(indData || []);
+    async function fetchIndicadoresAndEvaluations(examenId: string, isMounted = true) {
+        setIsLoadingData(true);
+        try {
+            const { data: indData } = await sqliteService.query(
+                'SELECT * FROM indicadores_examen WHERE examen_id = ? ORDER BY orden',
+                [parseInt(examenId)]
+            );
+            if (!isMounted) return;
+            setIndicadores(indData || []);
 
-        const indIds = (indData || []).map(i => i.id);
-        const { data: evalData } = await typedSupabase.from('evaluaciones_examen').select('*').in('indicador_id', indIds);
-
-        const evalMap: Record<string, Record<string, number>> = {};
-        (evalData || []).forEach(ev => {
-            if (!evalMap[ev.estudiante_id]) evalMap[ev.estudiante_id] = {};
-            evalMap[ev.estudiante_id][ev.indicador_id] = ev.puntaje || 0;
-        });
-        setEvaluaciones(evalMap);
-        setLoading(false);
+            const indIds: number[] = (indData || []).map((i: IndicadorExamen) => i.id);
+            if (indIds.length > 0) {
+                const { data: evalData } = await sqliteService.from('evaluaciones_examen').selectIn('*', 'indicador_id', indIds);
+                if (!isMounted) return;
+                const evalMap: Record<string, Record<string, number>> = {};
+                (evalData || []).forEach((ev: any) => {
+                    if (!evalMap[ev.estudiante_id]) evalMap[ev.estudiante_id] = {};
+                    evalMap[ev.estudiante_id][ev.indicador_id] = ev.puntaje || 0;
+                });
+                setEvaluaciones(evalMap);
+            } else {
+                setEvaluaciones({});
+            }
+        } finally {
+            if (isMounted) setIsLoadingData(false);
+        }
     }
 
-    const handleScoreClick = (estudianteId: string, indicadorId: string, score: number) => {
+    const handleScoreChange = (estudianteId: string, indicadorId: number, value: string) => {
+        const parsed = parseInt(value);
+        const score = isNaN(parsed) ? 0 : Math.max(0, Math.min(3, parsed));
         setEvaluaciones(prev => ({
             ...prev,
-            [estudianteId]: {
-                ...(prev[estudianteId] || {}),
-                [indicadorId]: score
-            }
+            [estudianteId]: { ...(prev[estudianteId] || {}), [indicadorId]: score }
         }));
+    };
+
+    const handleNotaFinalDirecta = (estudianteId: string, value: string) => {
+        setNotasFinalesDirectas(prev => ({ ...prev, [estudianteId]: value }));
     };
 
     const handleToggleAllScores = (estudianteId: string) => {
         setEvaluaciones(prev => {
             const studentEvals = prev[estudianteId] || {};
-            const allAreThree = indicadores.length > 0 && indicadores.every(ind => studentEvals[ind.id] === 3);
+            const allAreThree = indicadores.length > 0 && indicadores.every(ind => studentEvals[String(ind.id)] === 3);
             const newScore = allAreThree ? 0 : 3;
-            const updatedStudentEvals = { ...studentEvals };
-            indicadores.forEach(ind => { updatedStudentEvals[ind.id] = newScore; });
-            return { ...prev, [estudianteId]: updatedStudentEvals };
+            const updated = { ...studentEvals };
+            indicadores.forEach(ind => { updated[String(ind.id)] = newScore; });
+            return { ...prev, [estudianteId]: updated };
         });
     };
 
     const calculateGrades = (estudianteId: string) => {
         const currentExamen = examenes.find(e => String(e.id) === selectedExamen);
-        if (!currentExamen || indicadores.length === 0) return { nota: 0, obtenido: 0 };
+        if (!currentExamen) return { nota: 0, obtenido: 0 };
 
+        // Si hay nota final directa, usarla
+        const notaDirectaStr = notasFinalesDirectas[estudianteId];
+        if (notaDirectaStr !== undefined && notaDirectaStr !== '') {
+            const notaDirecta = Math.max(0, Math.min(100, parseFloat(notaDirectaStr) || 0));
+            const obtenido = Number(((notaDirecta / 100) * currentExamen.porcentaje).toFixed(2));
+            return { nota: notaDirecta, obtenido };
+        }
+
+        if (indicadores.length === 0) return { nota: 0, obtenido: 0 };
         const studentEvals = evaluaciones[estudianteId] || {};
-        let points = 0;
-        indicadores.forEach(ind => { points += studentEvals[ind.id] || 0; });
-
+        const points = indicadores.reduce((acc, ind) => acc + (studentEvals[String(ind.id)] || 0), 0);
         const nota = Math.round((points / currentExamen.puntos_totales) * 100) || 0;
         const obtenido = Number(((nota / 100) * currentExamen.porcentaje).toFixed(2));
-
         return { nota, obtenido };
     };
 
     async function saveEvaluations() {
         setIsSaving(true);
         try {
-            const upsertData: Database['public']['Tables']['evaluaciones_examen']['Insert'][] = [];
+            const upsertData: Record<string, any>[] = [];
             estudiantes.forEach(est => {
                 const estEvals = evaluaciones[est.cedula] || {};
                 indicadores.forEach(ind => {
@@ -140,8 +180,11 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
             });
 
             if (upsertData.length > 0) {
-                const { error } = await typedSupabase.from('evaluaciones_examen').upsert(upsertData, { onConflict: 'estudiante_id, indicador_id' });
-                if (error) throw error;
+                const { success, error } = await sqliteService.from('evaluaciones_examen').upsert(
+                    upsertData,
+                    { onConflict: 'estudiante_id, indicador_id' }
+                );
+                if (!success) throw new Error(error || 'Error al guardar');
             }
             showToast('Evaluaciones de examen guardadas', 'success');
         } catch (error: any) {
@@ -159,34 +202,43 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
 
     async function createExamen() {
         if (!editNombre) return;
-        setLoading(true);
+        setIsSaving(true);
         try {
-            const { data: examen, error: eError } = await typedSupabase.from('examenes').insert({
+            const { data: nuevoExamen, error: eError } = await sqliteService.from('examenes').insertReturning({
                 nombre: editNombre,
                 seccion_id: selectedSeccion,
                 porcentaje: editPorcentaje,
                 puntos_totales: editPuntosTotales,
                 periodo: periodo
-            }).select().single();
+            });
+            if (eError || !nuevoExamen) throw new Error(eError || 'No se pudo crear el examen');
 
-            if (eError) throw eError;
-
-            const indsData: Database['public']['Tables']['indicadores_examen']['Insert'][] = editIndicadores.map((ind, idx) => ({
-                examen_id: examen!.id,
-                titulo: ind.titulo,
-                orden: idx + 1,
-                desc_0: ind.d0, desc_1: ind.d1, desc_2: ind.d2, desc_3: ind.d3
-            }));
-
-            const { error: indError } = await typedSupabase.from('indicadores_examen').insert(indsData);
-            if (indError) throw indError;
+            const { success, error: indError } = await sqliteService.transaction(
+                editIndicadores.map((ind, idx) => ({
+                    sql: 'INSERT INTO indicadores_examen (examen_id, titulo, orden, desc_0, desc_1, desc_2, desc_3) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                    params: [nuevoExamen.id, ind.titulo, idx + 1, ind.d0, ind.d1, ind.d2, ind.d3]
+                }))
+            );
+            if (!success) throw new Error(indError || 'Error al insertar indicadores');
 
             showToast('Examen configurado correctamente', 'success');
             setShowManager(false);
             fetchExamenes(selectedSeccion);
         } catch (error: any) {
             showToast(`Error: ${error.message}`, 'error');
-        } finally { setLoading(false); }
+        } finally { setIsSaving(false); }
+    }
+
+    async function handleDeleteExamen() {
+        if (!selectedExamen) return;
+        if (!confirm('¿Estás seguro de eliminar este examen y todas sus notas?')) return;
+        const { error } = await sqliteService.from('examenes').delete('id', parseInt(selectedExamen));
+        if (!error) {
+            showToast('Examen eliminado', 'success');
+            fetchExamenes(selectedSeccion);
+        } else {
+            showToast(`Error al eliminar: ${error}`, 'error');
+        }
     }
 
     return (
@@ -224,15 +276,7 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
                                     value={selectedExamen}
                                     onChange={e => setSelectedExamen(e.target.value)}
                                     className="glass-card"
-                                    style={{
-                                        padding: '0.6rem 1.5rem',
-                                        background: 'rgba(255,255,255,0.1)',
-                                        color: 'white',
-                                        border: '1px solid var(--primary)',
-                                        fontSize: '1rem',
-                                        fontWeight: 'bold',
-                                        minWidth: '250px'
-                                    }}
+                                    style={{ padding: '0.6rem 1.5rem', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid var(--primary)', fontSize: '1rem', fontWeight: 'bold', minWidth: '250px' }}
                                 >
                                     {examenes.map(e => <option key={e.id} value={e.id} style={{ background: '#1e1b4b' }}>{e.nombre} ({e.porcentaje}%)</option>)}
                                     {examenes.length === 0 && <option value="">No hay exámenes creados</option>}
@@ -250,23 +294,19 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
                                 {isSaving ? '⌛ Guardando...' : '💾 Guardar Notas'}
                             </button>
                             {selectedExamen && (
-                                <button
-                                    onClick={async () => {
-                                        if (confirm('¿Estás seguro de eliminar este examen y todas sus notas?')) {
-                                            const { error } = await supabase.from('examenes').delete().eq('id', parseInt(selectedExamen));
-                                            if (!error) fetchExamenes(selectedSeccion);
-                                        }
-                                    }}
-                                    className="btn-primary"
-                                    style={{ background: 'var(--danger)', opacity: 0.8 }}
-                                >
+                                <button onClick={handleDeleteExamen} className="btn-primary" style={{ background: 'var(--danger)', opacity: 0.8 }}>
                                     🗑️ Eliminar
                                 </button>
                             )}
                         </div>
                     </div>
 
-                    {selectedExamen && (
+                    {isLoadingData && (
+                        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                            ⌛ Cargando evaluaciones...
+                        </div>
+                    )}
+                    {!isLoadingData && selectedExamen && (
                         <div className="glass-card" style={{ overflowX: 'auto', padding: '0' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
@@ -279,6 +319,7 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
                                                 <div style={{ fontSize: '0.6rem', fontWeight: 400, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ind.titulo}</div>
                                             </th>
                                         ))}
+                                        <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.75rem', color: '#facc15', fontWeight: 700 }}>NOTA<br/>FINAL</th>
                                         <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 700 }}>NOTA</th>
                                         <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 700 }}>VALOR</th>
                                     </tr>
@@ -288,25 +329,64 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
                                         const { nota, obtenido } = calculateGrades(est.cedula);
                                         const studentEvals = evaluaciones[est.cedula] || {};
                                         const allAreThree = indicadores.length > 0 && indicadores.every(ind => studentEvals[ind.id] === 3);
-
+                                        const notaDirecta = notasFinalesDirectas[est.cedula] ?? '';
+                                        const tieneNotaDirecta = notaDirecta !== '';
                                         return (
-                                            <tr key={est.cedula} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                            <tr key={est.cedula} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: tieneNotaDirecta ? 'rgba(250,204,21,0.03)' : 'transparent' }}>
                                                 <td style={{ padding: '1rem 1.5rem', fontSize: '0.9rem' }}>{est.apellidos}, {est.nombre}</td>
                                                 <td style={{ textAlign: 'center' }}>
                                                     <button onClick={() => handleToggleAllScores(est.cedula)} style={{ fontSize: '9px', padding: '4px 8px', borderRadius: '8px', background: allAreThree ? 'var(--danger)' : 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>{allAreThree ? 'MIN' : 'MAX'}</button>
                                                 </td>
                                                 {indicadores.map(ind => {
-                                                    const score = evaluaciones[est.cedula]?.[ind.id] ?? null;
+                                                    const score = evaluaciones[est.cedula]?.[String(ind.id)] ?? 0;
                                                     return (
                                                         <td key={ind.id} style={{ textAlign: 'center', padding: '0.5rem' }}>
-                                                            <div style={{ display: 'flex', gap: '2px', justifyContent: 'center' }}>
-                                                                {[0, 1, 2, 3].map(level => (
-                                                                    <button key={level} onClick={() => handleScoreClick(est.cedula, ind.id, level)} title={level === 0 ? (ind.desc_0 ?? '') : level === 1 ? (ind.desc_1 ?? '') : level === 2 ? (ind.desc_2 ?? '') : (ind.desc_3 ?? '')} style={{ width: '24px', height: '24px', borderRadius: '4px', border: 'none', background: score === level ? 'var(--primary)' : 'rgba(255,255,255,0.05)', color: 'white', fontSize: '10px', cursor: 'pointer' }}>{level}</button>
-                                                                ))}
-                                                            </div>
+                                                            <input
+                                                                type="number"
+                                                                min={0}
+                                                                max={3}
+                                                                value={score}
+                                                                onChange={e => handleScoreChange(est.cedula, ind.id, e.target.value)}
+                                                                title={`${ind.titulo} (0-3)`}
+                                                                style={{
+                                                                    width: '48px',
+                                                                    textAlign: 'center',
+                                                                    background: 'rgba(255,255,255,0.07)',
+                                                                    border: '1px solid rgba(99,102,241,0.3)',
+                                                                    borderRadius: '6px',
+                                                                    color: 'white',
+                                                                    fontSize: '0.9rem',
+                                                                    fontWeight: 700,
+                                                                    padding: '4px 2px',
+                                                                    outline: 'none'
+                                                                }}
+                                                            />
                                                         </td>
                                                     );
                                                 })}
+                                                <td style={{ textAlign: 'center', padding: '0.5rem' }}>
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        max={100}
+                                                        placeholder="—"
+                                                        value={notaDirecta}
+                                                        onChange={e => handleNotaFinalDirecta(est.cedula, e.target.value)}
+                                                        title="Nota Final Directa (sobreescribe indicadores)"
+                                                        style={{
+                                                            width: '58px',
+                                                            textAlign: 'center',
+                                                            background: tieneNotaDirecta ? 'rgba(250,204,21,0.15)' : 'rgba(255,255,255,0.05)',
+                                                            border: `1px solid ${tieneNotaDirecta ? '#facc15' : 'rgba(255,255,255,0.1)'}`,
+                                                            borderRadius: '6px',
+                                                            color: tieneNotaDirecta ? '#facc15' : 'var(--text-muted)',
+                                                            fontSize: '0.9rem',
+                                                            fontWeight: 700,
+                                                            padding: '4px 2px',
+                                                            outline: 'none'
+                                                        }}
+                                                    />
+                                                </td>
                                                 <td style={{ textAlign: 'center', fontWeight: 700, color: nota >= 70 ? 'var(--primary)' : 'var(--danger)' }}>{nota}%</td>
                                                 <td style={{ textAlign: 'center', fontWeight: 700, color: nota >= 70 ? 'var(--primary)' : 'var(--danger)' }}>{obtenido}%</td>
                                             </tr>
@@ -358,7 +438,7 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
 
                     <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
                         {editIndicadores.length < 5 && <button onClick={() => setEditIndicadores([...editIndicadores, { titulo: '', d0: '', d1: '', d2: '', d3: '' }])} className="btn-primary" style={{ background: 'rgba(255,255,255,0.1)' }}>➕ Añadir Indicador</button>}
-                        <button onClick={createExamen} disabled={loading} className="btn-primary">{loading ? '⌛ Guardando...' : '✅ Finalizar Configuración'}</button>
+                        <button onClick={createExamen} disabled={isSaving} className="btn-primary">{isSaving ? '⌛ Guardando...' : '✅ Finalizar Configuración'}</button>
                     </div>
                 </div>
             )}

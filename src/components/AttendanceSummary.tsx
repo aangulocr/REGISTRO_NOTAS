@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { Database } from '../types/database';
+import { sqliteService } from '../lib/sqliteService';
 
 interface AttendanceSummaryProps {
     seccionId: string;
@@ -22,24 +21,33 @@ export const AttendanceSummary: React.FC<AttendanceSummaryProps> = ({ seccionId,
         setLoading(true);
         try {
             // 1. Get Section info
-            const { data } = await supabase.from('secciones').select('*').eq('id', seccionId).single();
-            const secData = data as Database['public']['Tables']['secciones']['Row'] | null;
-            setSeccionName(secData?.nombre || '');
+            const { data: sectionData } = await sqliteService.query('SELECT * FROM secciones WHERE id = ?', [seccionId]);
+            if (sectionData && sectionData.length > 0) {
+                setSeccionName(sectionData[0].nombre);
+            }
 
             // 2. Get Students
-            const { data: estData } = await supabase.from('estudiantes').select('*').eq('seccion_id', seccionId).order('apellidos');
+            const { data: estData } = await sqliteService.query(
+                'SELECT * FROM estudiantes WHERE seccion_id = ? ORDER BY apellidos',
+                [seccionId]
+            );
             const students = estData || [];
             setEstudiantes(students);
 
-            // 3. Get Attendance Records
-            const { data: attendanceData } = await supabase
-                .from('control_asistencia')
-                .select('estudiante_id, fecha, estado_id, estados_asistencia(peso_ausencia, es_justificada)')
-                .eq('seccion_id', seccionId)
-                .eq('periodo', periodo);
+            // 3. Get Attendance Records with JOIN
+            const { data: attendanceData } = await sqliteService.query(
+                `SELECT ca.estudiante_id, ca.fecha, ca.estado_id, ea.peso_ausencia, ea.es_justificada 
+                 FROM control_asistencia ca 
+                 JOIN estados_asistencia ea ON ca.estado_id = ea.id 
+                 WHERE ca.seccion_id = ? AND ca.periodo = ?`,
+                [seccionId, periodo]
+            );
 
             // 4. Get Daily Configs
-            const { data: configData } = await supabase.from('configuracion_diaria').select('fecha, lecciones_totales').eq('seccion_id', seccionId).eq('periodo', periodo);
+            const { data: configData } = await sqliteService.query(
+                'SELECT fecha, lecciones_totales FROM configuracion_diaria WHERE seccion_id = ? AND periodo = ?',
+                [seccionId, periodo]
+            );
             const configMap: Record<string, number> = {};
             configData?.forEach((c: any) => { configMap[c.fecha] = c.lecciones_totales; });
 
@@ -49,8 +57,8 @@ export const AttendanceSummary: React.FC<AttendanceSummaryProps> = ({ seccionId,
             // First calculate total programmed lessons for the section
             const uniqueDates = Array.from(new Set((attendanceData || []).map((a: any) => a.fecha)));
             let totalProgrammedLessons = 0;
-            uniqueDates.forEach(d => {
-                totalProgrammedLessons += configMap[d] || 4;
+            uniqueDates.forEach((d: any) => {
+                totalProgrammedLessons += configMap[String(d)] || 4;
             });
 
             students.forEach((est: any) => {
@@ -59,28 +67,23 @@ export const AttendanceSummary: React.FC<AttendanceSummaryProps> = ({ seccionId,
 
                 studentAttendance.forEach((att: any) => {
                     // Only count unjustified absences/tardies
-                    if (!att.estados_asistencia?.es_justificada) {
+                    if (!att.es_justificada) {
                         const lessonsToday = configMap[att.fecha] || 4;
-                        let weight = att.estados_asistencia?.peso_ausencia || 0;
+                        let weight = att.peso_ausencia || 0;
 
                         // Scale weight if lessons < 4
                         if (lessonsToday < 4 && weight > 0) {
-                            // If it was "Ausencia Total (4)", and today there are only 2, it should count as 2.
                             weight = (weight / 4) * lessonsToday;
                         }
                         totalWeight += weight;
                     }
                 });
 
-                // Apply logic: Math.floor of total weights
                 const flooredAbsences = Math.floor(totalWeight);
-
-                // Porcentaje de ausentismo: (Ausencias / Lecciones) * 100
                 const absenteeismPercentage = totalProgrammedLessons > 0
                     ? (flooredAbsences / totalProgrammedLessons) * 100
                     : 0;
 
-                // Escala MEP:
                 let grade = 0;
                 if (absenteeismPercentage < 10) grade = 5;
                 else if (absenteeismPercentage < 20) grade = 4;

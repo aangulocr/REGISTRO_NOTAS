@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { Database } from '../types/database';
+import { sqliteService } from '../lib/sqliteService';
 import { useToast } from './Toast';
 
-type Estudiante = Database['public']['Tables']['estudiantes']['Row'];
-type Estado = Database['public']['Tables']['estados_asistencia']['Row'];
+interface Estudiante {
+    cedula: string;
+    nombre: string;
+    apellidos: string;
+}
 
 interface Props {
     seccionId: string;
@@ -22,6 +24,7 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
     const [isSaving, setIsSaving] = useState(false);
     const [leccionesTotales, setLeccionesTotales] = useState<number>(4);
     const [observaciones, setObservaciones] = useState<string>('');
+    const [observacionClase, setObservacionClase] = useState<string>('');
     const { showToast } = useToast();
 
     const lessonColors: Record<LessonStatus, string> = {
@@ -75,38 +78,32 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
         setLoading(true);
         try {
             // 1. Load configuration (lessons per day)
-            const { data: configDataRaw } = await supabase
-                .from('configuracion_diaria')
-                .select('*')
-                .eq('seccion_id', seccionId)
-                .eq('fecha', fecha)
-                .eq('periodo', periodo)
-                .maybeSingle();
+            const { data: configData } = await sqliteService.query(
+                'SELECT * FROM configuracion_diaria WHERE seccion_id = ? AND fecha = ? AND periodo = ?',
+                [seccionId, fecha, periodo]
+            );
 
-            const configData = configDataRaw as Database['public']['Tables']['configuracion_diaria']['Row'] | null;
-
-            if (configData) {
-                setLeccionesTotales(configData.lecciones_totales);
-                setObservaciones(configData.observaciones || '');
+            if (configData && configData.length > 0) {
+                setLeccionesTotales(configData[0].lecciones_totales);
+                setObservaciones(configData[0].observaciones || '');
+                setObservacionClase(configData[0].observacion_clase || '');
             } else {
                 setLeccionesTotales(4);
                 setObservaciones('');
+                setObservacionClase('');
             }
 
             // 2. Load students
-            const { data: studentsData } = await supabase
-                .from('estudiantes')
-                .select('*')
-                .eq('seccion_id', seccionId)
-                .order('apellidos');
+            const { data: studentsData } = await sqliteService.query(
+                'SELECT * FROM estudiantes WHERE seccion_id = ? ORDER BY apellidos',
+                [seccionId]
+            );
 
             // 3. Load attendance
-            const { data: attendanceData } = await supabase
-                .from('control_asistencia')
-                .select('*')
-                .eq('seccion_id', seccionId)
-                .eq('fecha', fecha)
-                .eq('periodo', periodo);
+            const { data: attendanceData } = await sqliteService.query(
+                'SELECT * FROM control_asistencia WHERE seccion_id = ? AND fecha = ? AND periodo = ?',
+                [seccionId, fecha, periodo]
+            );
 
             const attendanceMap: Record<string, LessonStatus[]> = {};
             if (attendanceData) {
@@ -128,7 +125,6 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
             setAsistencias(attendanceMap);
         } catch (err) {
             console.error('Error loading data:', err);
-            // No toast here as single() might fail if no config exists, which is normal
         } finally {
             setLoading(false);
         }
@@ -157,34 +153,32 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
     async function handleSave() {
         setIsSaving(true);
         try {
-            // 1. Save lesson configuration
-            const { error: configError } = await (supabase as any)
-                .from('configuracion_diaria')
-                .upsert({
-                    seccion_id: seccionId,
-                    fecha: fecha,
-                    periodo: periodo,
-                    lecciones_totales: leccionesTotales,
-                    observaciones: observaciones
-                }, { onConflict: 'seccion_id, fecha, periodo' });
+            const queries = [
+                {
+                    sql: `INSERT INTO configuracion_diaria (seccion_id, fecha, periodo, lecciones_totales, observaciones, observacion_clase) 
+                          VALUES (?, ?, ?, ?, ?, ?)
+                          ON CONFLICT(seccion_id, fecha, periodo) DO UPDATE SET 
+                          lecciones_totales = excluded.lecciones_totales,
+                          observaciones = excluded.observaciones,
+                          observacion_clase = excluded.observacion_clase`,
+                    params: [seccionId, fecha, periodo, leccionesTotales, observaciones, observacionClase]
+                }
+            ];
 
-            if (configError) throw configError;
+            estudiantes.forEach(est => {
+                queries.push({
+                    sql: `INSERT INTO control_asistencia (estudiante_id, seccion_id, fecha, periodo, estado_id) 
+                          VALUES (?, ?, ?, ?, ?)
+                          ON CONFLICT(estudiante_id, fecha, periodo) DO UPDATE SET 
+                          estado_id = excluded.estado_id`,
+                    params: [est.cedula, seccionId, fecha, periodo, mapLessonsToState(asistencias[est.cedula])]
+                });
+            });
 
-            // 2. Save attendance
-            const upsertData = estudiantes.map(est => ({
-                estudiante_id: est.cedula,
-                seccion_id: seccionId,
-                fecha: fecha,
-                estado_id: mapLessonsToState(asistencias[est.cedula])
-            }));
+            const { success, error: transError } = await sqliteService.transaction(queries);
+            if (!success) throw new Error(transError || 'Error al guardar');
 
-            const { error: attendanceError } = await supabase
-                .from('control_asistencia')
-                .upsert(upsertData as any, { onConflict: 'estudiante_id, fecha' });
-
-            if (attendanceError) throw attendanceError;
-
-            showToast('Asistencia y configuración guardadas', 'success');
+            showToast('Asistencia y configuración guardadas correctamente', 'success');
             if (onSave) onSave();
         } catch (error: any) {
             console.error('Error saving:', error);
@@ -241,11 +235,11 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
 
             <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
                 <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.75rem' }}>
-                    Observaciones del Grupo:
+                    OBSERVACIÓN (Clase o Grupo):
                 </label>
                 <textarea
-                    value={observaciones}
-                    onChange={(e) => setObservaciones(e.target.value)}
+                    value={observacionClase}
+                    onChange={(e) => setObservacionClase(e.target.value)}
                     placeholder="Escriba aquí cualquier observación relevante sobre la sección o la lección de hoy..."
                     style={{
                         width: '100%',

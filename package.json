@@ -1,28 +1,32 @@
 {
-  "name": "asistencia",
+  "name": "registro-notas",
   "version": "1.0.0",
-  "description": "Este proyecto es una aplicación web profesional diseñada para automatizar la gestión administrativa de los docentes bajo la normativa MEP 2026. Permite el control total de asistencia, evaluaciones de trabajo cotidiano, tareas, exámenes y la generación de reportes consolidados.",
+  "productName": "Registro de Notas MEP 2026",
+  "description": "Sistema profesional de registro de notas y asistencia para docentes MEP 2026. Gestiona trabajo cotidiano, tareas, exámenes y genera reportes consolidados.",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "start": "electron-forge start",
+    "api": "electron api-server.cjs",
+    "web": "npx concurrently \"npm run api\" \"npm run dev\"",
     "package": "electron-forge package",
     "make": "electron-forge make"
   },
   "keywords": [],
-  "author": "",
+  "author": "Arnol",
   "license": "ISC",
   "dependencies": {
-    "@supabase/supabase-js": "^2.48.1",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",
+    "better-sqlite3": "^12.6.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "electron-squirrel-startup": "^1.0.1",
     "lucide-react": "^0.475.0",
+    "pg": "^8.20.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.1",
@@ -30,7 +34,7 @@
     "vite": "^6.1.0",
     "xlsx": "^0.18.5"
   },
-  "main": "index.js",
+  "main": "main.cjs",
   "devDependencies": {
     "@electron-forge/cli": "^7.11.1",
     "@electron-forge/maker-deb": "^7.11.1",
@@ -49,5 +53,5 @@
   "bugs": {
     "url": "https://github.com/aangulocr/asistencia/issues"
   },
-  "homepage": "https://github.com/aangulocr/asistencia#readme"
+  "homepage": "https://github.com/aangulocr/registro-notas#readme"
 }

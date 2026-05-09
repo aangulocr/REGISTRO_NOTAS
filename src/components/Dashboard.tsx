@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { Database } from '../types/database';
+import { sqliteService } from '../lib/sqliteService';
+import { Database } from '../types/database'; // Mantener por tipos si es necesario
 
 interface Props {
     seccionId: string;
@@ -20,30 +20,29 @@ export function Dashboard({ seccionId, periodo }: Props) {
 
     async function calculateStats() {
         // 1. Get student count
-        const { count: studentCount } = await supabase
-            .from('estudiantes')
-            .select('*', { count: 'exact', head: true })
-            .eq('seccion_id', seccionId);
+        const { data: studentData } = await sqliteService.query(
+            'SELECT COUNT(*) as count FROM estudiantes WHERE seccion_id = ?',
+            [seccionId]
+        );
+        const totalStudents = studentData?.[0]?.count || 1;
 
-        const totalStudents = studentCount || 1;
-
-        // 2. Get attendance records
-        const { data: attendanceData } = await supabase
-            .from('control_asistencia')
-            .select('fecha, estado_id, estados_asistencia(peso_ausencia)')
-            .eq('seccion_id', seccionId)
-            .eq('periodo', periodo);
+        // 2. Get attendance records with JOIN
+        const { data: attendanceData } = await sqliteService.query(
+            `SELECT ca.fecha, ca.estado_id, ea.peso_ausencia 
+             FROM control_asistencia ca 
+             JOIN estados_asistencia ea ON ca.estado_id = ea.id 
+             WHERE ca.seccion_id = ? AND ca.periodo = ?`,
+            [seccionId, periodo]
+        );
 
         // 3. Get daily configurations
-        const { data: configData } = await supabase
-            .from('configuracion_diaria')
-            .select('fecha, lecciones_totales')
-            .eq('seccion_id', seccionId)
-            .eq('periodo', periodo);
+        const { data: configData } = await sqliteService.query(
+            'SELECT fecha, lecciones_totales FROM configuracion_diaria WHERE seccion_id = ? AND periodo = ?',
+            [seccionId, periodo]
+        );
 
         const configMap: Record<string, number> = {};
-        const typedConfig = configData as Database['public']['Tables']['configuracion_diaria']['Row'][] | null;
-        typedConfig?.forEach(c => {
+        configData?.forEach((c: any) => {
             configMap[c.fecha] = c.lecciones_totales;
         });
 

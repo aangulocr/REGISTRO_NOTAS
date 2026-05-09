@@ -1,14 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { Database } from '../types/database';
-import { SupabaseClient } from '@supabase/supabase-js';
-
-const typedSupabase = supabase as SupabaseClient<Database>;
-
-type Estudiante = Database['public']['Tables']['estudiantes']['Row'];
-type Examen = Database['public']['Tables']['examenes']['Row'];
-type IndicadorExamen = Database['public']['Tables']['indicadores_examen']['Row'];
-type EvaluacionExamen = Database['public']['Tables']['evaluaciones_examen']['Row'];
+import { sqliteService } from '../lib/sqliteService';
 
 interface ExamenSummaryProps {
     seccionId: string;
@@ -16,61 +7,79 @@ interface ExamenSummaryProps {
     onClose: () => void;
 }
 
+interface Examen {
+    id: number;
+    nombre: string;
+    porcentaje: number;
+    puntos_totales: number;
+}
+interface Estudiante {
+    cedula: string;
+    nombre: string;
+    apellidos: string;
+}
+
 export const ExamenSummary: React.FC<ExamenSummaryProps> = ({ seccionId, periodo, onClose }) => {
     const [loading, setLoading] = useState(true);
     const [seccionName, setSeccionName] = useState('');
     const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
     const [examenes, setExamenes] = useState<Examen[]>([]);
-    const [gradesMap, setGradesMap] = useState<Record<string, Record<number, { nota: number, obtenido: number }>>>({}); // student_id -> examen_id -> grades
+    const [gradesMap, setGradesMap] = useState<Record<string, Record<number, { nota: number; obtenido: number }>>>({});
 
-    useEffect(() => {
-        fetchData();
-    }, [seccionId, periodo]);
+    useEffect(() => { fetchData(); }, [seccionId, periodo]);
 
     async function fetchData() {
         setLoading(true);
         try {
-            // Seccion info
-            const { data: secData } = await typedSupabase.from('secciones').select('nombre').eq('id', seccionId).single();
-            setSeccionName(secData?.nombre || '');
+            // 1. Nombre de la sección
+            const { data: secData } = await sqliteService.query(
+                'SELECT nombre FROM secciones WHERE id = ?', [seccionId]
+            );
+            setSeccionName(secData?.[0]?.nombre || '');
 
-            // Students
-            const { data: estData } = await typedSupabase.from('estudiantes').select('*').eq('seccion_id', seccionId).order('apellidos');
-            const students = estData || [];
+            // 2. Estudiantes
+            const { data: estData } = await sqliteService.query(
+                'SELECT * FROM estudiantes WHERE seccion_id = ? ORDER BY apellidos', [seccionId]
+            );
+            const students: Estudiante[] = estData || [];
             setEstudiantes(students);
 
-            // Exams
-            const { data: exData } = await typedSupabase.from('examenes').select('*').eq('seccion_id', seccionId).eq('periodo', periodo).order('id');
-            const exams = exData || [];
+            // 3. Exámenes
+            const { data: exData } = await sqliteService.query(
+                'SELECT * FROM examenes WHERE seccion_id = ? AND periodo = ? ORDER BY id',
+                [seccionId, periodo]
+            );
+            const exams: Examen[] = exData || [];
             setExamenes(exams);
 
             if (exams.length > 0) {
-                const exIds = exams.map(e => e.id);
-                // Indicators
-                const { data: indData } = await typedSupabase.from('indicadores_examen').select('*').in('examen_id', exIds);
+                const exIds: number[] = exams.map(e => e.id);
+
+                // 4. Indicadores para esos exámenes
+                const { data: indData } = await sqliteService.from('indicadores_examen').selectIn('*', 'examen_id', exIds);
                 const indicators = indData || [];
 
-                // Evaluations
-                const { data: evalData } = await typedSupabase.from('evaluaciones_examen').select('*').in('indicador_id', indicators.map(i => i.id));
+                // 5. Evaluaciones para esos indicadores
+                const indIds: number[] = indicators.map((i: any) => i.id);
+                const { data: evalData } = indIds.length > 0
+                    ? await sqliteService.from('evaluaciones_examen').selectIn('*', 'indicador_id', indIds)
+                    : { data: [] };
                 const evaluations = evalData || [];
 
-                // Calculate grades
-                const newGradesMap: Record<string, Record<number, { nota: number, obtenido: number }>> = {};
+                // 6. Calcular notas por estudiante/examen
+                const newGradesMap: Record<string, Record<number, { nota: number; obtenido: number }>> = {};
                 students.forEach(est => {
                     newGradesMap[est.cedula] = {};
                     exams.forEach(ex => {
-                        const exInds = indicators.filter(i => i.examen_id === ex.id);
-                        const studentEvals = evaluations.filter(ev =>
+                        const exInds = indicators.filter((i: any) => i.examen_id === ex.id);
+                        const studentEvals = evaluations.filter((ev: any) =>
                             ev.estudiante_id === est.cedula &&
-                            exInds.some(i => i.id === ev.indicador_id)
+                            exInds.some((i: any) => i.id === ev.indicador_id)
                         );
-
                         let pointsPaid = 0;
-                        studentEvals.forEach(ev => { pointsPaid += ev.puntaje || 0; });
-
+                        studentEvals.forEach((ev: any) => { pointsPaid += ev.puntaje || 0; });
                         const nota = Math.round((pointsPaid / ex.puntos_totales) * 100) || 0;
                         const obtenido = Number(((nota / 100) * ex.porcentaje).toFixed(2));
-
                         newGradesMap[est.cedula][ex.id] = { nota, obtenido };
                     });
                 });
@@ -148,83 +157,20 @@ export const ExamenSummary: React.FC<ExamenSummaryProps> = ({ seccionId, periodo
                 <style>{`
                     @media print {
                         @page { size: landscape; margin: 10mm; }
-                        
-                        html, body { 
-                            height: auto !important; 
-                            overflow: visible !important; 
-                            background: white !important;
-                            margin: 0 !important;
-                            padding: 0 !important;
-                        }
-                        /* Reset layout for print */
+                        html, body { height: auto !important; overflow: visible !important; background: white !important; margin: 0 !important; padding: 0 !important; }
                         .app-layout { display: block !important; }
                         .sidebar { display: none !important; }
-                        .container { 
-                            padding: 0 !important; 
-                            margin: 0 !important; 
-                            max-width: none !important; 
-                            width: 100% !important; 
-                        }
-
-                        /* Ocultar todo lo que no sea el modal */
+                        .container { padding: 0 !important; margin: 0 !important; max-width: none !important; width: 100% !important; }
                         .no-print { display: none !important; }
                         .only-print { display: block !important; }
-                        
-                        /* Posicionar el modal como el elemento principal de la página */
-                        .modal-overlay { 
-                            position: static !important; 
-                            width: 100% !important; 
-                            background: white !important; 
-                            padding: 0 !important;
-                            display: block !important;
-                            overflow: visible !important;
-                        }
-                        
-                        .glass-card { 
-                            background: white !important; 
-                            border: none !important; 
-                            color: black !important; 
-                            width: 100% !important; 
-                            max-width: 100% !important;
-                            box-shadow: none !important;
-                            padding: 0 !important;
-                            overflow: visible !important;
-                            display: block !important;
-                            backdrop-filter: none !important;
-                            -webkit-backdrop-filter: none !important;
-                        }
-                        
+                        .modal-overlay { position: static !important; width: 100% !important; background: white !important; padding: 0 !important; display: block !important; overflow: visible !important; }
+                        .glass-card { background: white !important; border: none !important; color: black !important; width: 100% !important; max-width: 100% !important; box-shadow: none !important; padding: 0 !important; overflow: visible !important; display: block !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
                         h1, h2, h3, p, div, span { color: black !important; }
-                        
-                        table { 
-                            width: 100% !important; 
-                            border-collapse: collapse !important; 
-                            color: black !important; 
-                            font-size: 10pt !important;
-                            margin-top: 10px !important;
-                            table-layout: auto !important;
-                        }
-                        
-                        th { 
-                            border: 1px solid black !important; 
-                            color: black !important; 
-                            background: #f0f0f0 !important;
-                            padding: 8px !important;
-                        }
-                        
-                        td { 
-                            border: 1px solid black !important; 
-                            color: black !important; 
-                            padding: 8px !important;
-                            page-break-inside: avoid !important;
-                        }
-                        
+                        table { width: 100% !important; border-collapse: collapse !important; color: black !important; font-size: 10pt !important; margin-top: 10px !important; table-layout: auto !important; }
+                        th { border: 1px solid black !important; color: black !important; background: #f0f0f0 !important; padding: 8px !important; }
+                        td { border: 1px solid black !important; color: black !important; padding: 8px !important; page-break-inside: avoid !important; }
                         tr { page-break-inside: avoid; }
-                        
-                        * { 
-                            -webkit-print-color-adjust: exact !important; 
-                            print-color-adjust: exact !important; 
-                        }
+                        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                     }
                 `}</style>
             </div>

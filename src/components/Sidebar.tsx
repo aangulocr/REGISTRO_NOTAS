@@ -6,9 +6,10 @@ interface SidebarProps {
     onViewChange: (view: 'attendance' | 'students' | 'cotidiano' | 'tareas' | 'examenes' | 'asistencia_nota' | 'reports') => void;
     periodo: number;
     onPeriodoChange: (periodo: number) => void;
+    onLogout?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ className, currentView, onViewChange, periodo, onPeriodoChange }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ className, currentView, onViewChange, periodo, onPeriodoChange, onLogout }) => {
     const evaluationItems = [
         { id: 'attendance', icon: '📅', label: 'Asistencia' },
         { id: 'cotidiano', icon: '📝', label: 'Trabajo Cotidiano' },
@@ -58,8 +59,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, currentView, onView
         <aside className={`sidebar glass-card ${className || ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
             <div className="sidebar-header" style={{ padding: '1.5rem 1rem' }}>
                 <div className="logo">
-                    <span className="logo-icon" style={{ fontSize: '1.8rem' }}>🏫</span>
-                    <span className="logo-text" style={{ fontSize: '1.2rem', fontWeight: 800, background: 'linear-gradient(135deg, #fff 0%, #a5b4fc 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>MEP 2026</span>
+                    <span className="logo-icon" style={{ fontSize: '1.8rem' }}>📋</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                        <span className="logo-text" style={{ fontSize: '1rem', fontWeight: 800, background: 'linear-gradient(135deg, #fff 0%, #a5b4fc 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Registro Notas</span>
+                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em' }}>MEP 2026</span>
+                    </div>
                 </div>
             </div>
 
@@ -106,14 +110,46 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, currentView, onView
             </nav>
 
 
-            <div className="sidebar-footer">
-                <div className="user-profile">
-                    <div className="user-avatar">👤</div>
-                    <div className="user-info">
-                        <span className="user-name">Profesor</span>
-                        <span className="user-role">Administrador</span>
+            <div className="sidebar-footer" style={{ padding: '1.5rem 1rem', borderTop: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div className="user-profile" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div className="user-avatar" style={{ width: '40px', height: '40px', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</div>
+                    <div className="user-info" style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span className="user-name" style={{ fontWeight: 600, fontSize: '0.9rem' }}>Profesor</span>
+                        <span className="user-role" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Administrador</span>
                     </div>
                 </div>
+                
+                {onLogout && (
+                    <button 
+                        onClick={onLogout}
+                        style={{
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            color: '#fca5a5',
+                            padding: '0.6rem',
+                            borderRadius: '10px',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.5rem',
+                            transition: 'all 0.2s',
+                            width: '100%'
+                        }}
+                        onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)' }}
+                        onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)' }}
+                        title="Cerrar sesión y volver al login"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        Cerrar Sesión
+                    </button>
+                )}
             </div>
         </aside>
     );

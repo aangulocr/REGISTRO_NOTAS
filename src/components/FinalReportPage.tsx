@@ -1,23 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { sqliteService } from '../lib/sqliteService';
 import { useToast } from './Toast';
-import { Database } from '../types/database';
-import { SupabaseClient } from '@supabase/supabase-js';
 
-const typedSupabase = supabase as SupabaseClient<Database>;
-
-type Seccion = Database['public']['Tables']['secciones']['Row'];
-type Estudiante = Database['public']['Tables']['estudiantes']['Row'];
-type TrabajoCotidiano = Database['public']['Tables']['trabajos_cotidianos']['Row'];
-type IndicadorCotidiano = Database['public']['Tables']['indicadores']['Row'];
-type Tarea = Database['public']['Tables']['tareas']['Row'];
-type IndicadorTarea = Database['public']['Tables']['indicadores_tarea']['Row'];
-type Examen = Database['public']['Tables']['examenes']['Row'];
-type IndicadorExamen = Database['public']['Tables']['indicadores_examen']['Row'];
-type ConfiguracionDiaria = Database['public']['Tables']['configuracion_diaria']['Row'];
-type EvaluacionCotidiano = Database['public']['Tables']['evaluaciones_cotidiano']['Row'];
-type EvaluacionTarea = Database['public']['Tables']['evaluaciones_tarea']['Row'];
-type EvaluacionExamen = Database['public']['Tables']['evaluaciones_examen']['Row'];
+// ─── Tipos locales ───────────────────────────────────────────────────────────
+interface Seccion { id: string; nombre: string; nivel: number; }
+interface Estudiante { cedula: string; nombre: string; apellidos: string; }
+interface TrabajoCotidiano { id: number; seccion_id: string; periodo: number; }
+interface Tarea { id: number; seccion_id: string; porcentaje: number; puntos_totales: number; periodo: number; }
+interface Examen { id: number; seccion_id: string; porcentaje: number; puntos_totales: number; periodo: number; }
+interface ConfigDiaria { fecha: string; periodo: number; lecciones_totales: number; }
+interface AttRow { estudiante_id: string; fecha: string; periodo: number; estado_id: number; peso_ausencia: number; es_justificada: number; }
 
 interface ConsolidatedStudent {
     cedula: string;
@@ -29,14 +21,6 @@ interface ConsolidatedStudent {
     total: string;
 }
 
-interface AttRowJoined {
-    estudiante_id: string;
-    fecha: string;
-    periodo: number;
-    estado_id: number;
-    estados_asistencia: { peso_ausencia: number, es_justificada: boolean } | null;
-}
-
 interface Props {
     periodo: number;
 }
@@ -44,25 +28,19 @@ interface Props {
 export const FinalReportPage: React.FC<Props> = ({ periodo }) => {
     const [secciones, setSecciones] = useState<Seccion[]>([]);
     const [selectedSeccion, setSelectedSeccion] = useState<string>('');
-    const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(false);
     const [viewMode, setViewMode] = useState<'semester' | 'annual'>('semester');
     const [reportData, setReportData] = useState<ConsolidatedStudent[]>([]);
     const { showToast } = useToast();
 
+    useEffect(() => { fetchInitialData(); }, []);
     useEffect(() => {
-        fetchInitialData();
-    }, []);
-
-    useEffect(() => {
-        if (selectedSeccion) {
-            fetchReportData(selectedSeccion);
-        }
+        if (selectedSeccion) fetchReportData(selectedSeccion);
     }, [selectedSeccion, periodo, viewMode]);
 
     async function fetchInitialData() {
-        const { data } = await typedSupabase.from('secciones').select('*').order('nombre') as { data: Seccion[] | null };
+        const { data } = await sqliteService.query('SELECT * FROM secciones ORDER BY nombre');
         setSecciones(data || []);
         if (data && data.length > 0) setSelectedSeccion(data[0].id);
     }
@@ -70,120 +48,153 @@ export const FinalReportPage: React.FC<Props> = ({ periodo }) => {
     async function fetchReportData(seccionId: string) {
         setLoading(true);
         try {
-            // 1. Get Students
-            const { data: estData } = await typedSupabase.from('estudiantes').select('*').eq('seccion_id', seccionId).order('apellidos');
+            // 1. Estudiantes
+            const { data: estData } = await sqliteService.query(
+                'SELECT * FROM estudiantes WHERE seccion_id = ? ORDER BY apellidos', [seccionId]
+            );
             const students: Estudiante[] = estData || [];
 
-            // 2. Determine periods to fetch
             const periodsToFetch = viewMode === 'semester' ? [periodo] : [1, 2];
+            const periodPlaceholders = periodsToFetch.map(() => '?').join(', ');
 
-            // 3. Fetch all evaluation components for required periods
-            const { data: tcData } = await typedSupabase.from('trabajos_cotidianos').select('*').eq('seccion_id', seccionId).in('periodo', periodsToFetch) as { data: TrabajoCotidiano[] | null };
-            const { data: tarData } = await typedSupabase.from('tareas').select('*').eq('seccion_id', seccionId).in('periodo', periodsToFetch) as { data: Tarea[] | null };
-            const { data: exData } = await typedSupabase.from('examenes').select('*').eq('seccion_id', seccionId).in('periodo', periodsToFetch) as { data: Examen[] | null };
-            const { data: attData } = await typedSupabase.from('control_asistencia').select('estudiante_id, fecha, periodo, estado_id, estados_asistencia(peso_ausencia, es_justificada)').eq('seccion_id', seccionId).in('periodo', periodsToFetch) as { data: AttRowJoined[] | null };
-            const { data: configData } = await typedSupabase.from('configuracion_diaria').select('fecha, periodo, lecciones_totales').eq('seccion_id', seccionId).in('periodo', periodsToFetch) as { data: ConfiguracionDiaria[] | null };
+            // 2. Datos de evaluación por período
+            const { data: tcData } = await sqliteService.query(
+                `SELECT * FROM trabajos_cotidianos WHERE seccion_id = ? AND periodo IN (${periodPlaceholders})`,
+                [seccionId, ...periodsToFetch]
+            );
+            const { data: tarData } = await sqliteService.query(
+                `SELECT * FROM tareas WHERE seccion_id = ? AND periodo IN (${periodPlaceholders})`,
+                [seccionId, ...periodsToFetch]
+            );
+            const { data: exData } = await sqliteService.query(
+                `SELECT * FROM examenes WHERE seccion_id = ? AND periodo IN (${periodPlaceholders})`,
+                [seccionId, ...periodsToFetch]
+            );
+            const { data: attData } = await sqliteService.query(
+                `SELECT ca.estudiante_id, ca.fecha, ca.periodo, ca.estado_id,
+                        ea.peso_ausencia, ea.es_justificada
+                 FROM control_asistencia ca
+                 JOIN estados_asistencia ea ON ca.estado_id = ea.id
+                 WHERE ca.seccion_id = ? AND ca.periodo IN (${periodPlaceholders})`,
+                [seccionId, ...periodsToFetch]
+            );
+            const { data: configData } = await sqliteService.query(
+                `SELECT fecha, periodo, lecciones_totales FROM configuracion_diaria WHERE seccion_id = ? AND periodo IN (${periodPlaceholders})`,
+                [seccionId, ...periodsToFetch]
+            );
 
-            // Additional data for cotidiano
-            const tcIds = (tcData || []).map(t => t.id);
-            const { data: tcIndData } = await typedSupabase.from('indicadores').select('id, trabajo_id').in('trabajo_id', tcIds) as { data: IndicadorCotidiano[] | null };
-            const tcIndIds = (tcIndData || []).map(i => i.id);
-            const { data: tcEvalData } = await typedSupabase.from('evaluaciones_cotidiano').select('*').in('indicador_id', tcIndIds) as { data: EvaluacionCotidiano[] | null };
+            // 3. Indicadores y evaluaciones de cotidiano
+            const tcIds: number[] = (tcData || []).map((t: any) => t.id);
+            const { data: tcIndData } = tcIds.length > 0
+                ? await sqliteService.from('indicadores').selectIn('id, trabajo_id', 'trabajo_id', tcIds)
+                : { data: [] };
+            const tcIndIds: number[] = (tcIndData || []).map((i: any) => i.id);
+            const { data: tcEvalData } = tcIndIds.length > 0
+                ? await sqliteService.from('evaluaciones_cotidiano').selectIn('*', 'indicador_id', tcIndIds)
+                : { data: [] };
 
-            // Additional data for tasks/exams
-            const tarIds = (tarData || []).map(t => t.id);
-            const { data: tarIndData } = await typedSupabase.from('indicadores_tarea').select('id, tarea_id').in('tarea_id', tarIds) as { data: IndicadorTarea[] | null };
-            const tarIndIds = (tarIndData || []).map(i => i.id);
-            const { data: tarEvalData } = await typedSupabase.from('evaluaciones_tarea').select('*').in('indicador_id', tarIndIds) as { data: EvaluacionTarea[] | null };
+            // 4. Indicadores y evaluaciones de tareas
+            const tarIds: number[] = (tarData || []).map((t: any) => t.id);
+            const { data: tarIndData } = tarIds.length > 0
+                ? await sqliteService.from('indicadores_tarea').selectIn('id, tarea_id', 'tarea_id', tarIds)
+                : { data: [] };
+            const tarIndIds: number[] = (tarIndData || []).map((i: any) => i.id);
+            const { data: tarEvalData } = tarIndIds.length > 0
+                ? await sqliteService.from('evaluaciones_tarea').selectIn('*', 'indicador_id', tarIndIds)
+                : { data: [] };
 
-            const exIds = (exData || []).map(e => e.id);
-            const { data: exIndData } = await typedSupabase.from('indicadores_examen').select('id, examen_id').in('examen_id', exIds) as { data: IndicadorExamen[] | null };
-            const exIndIds = (exIndData || []).map(i => i.id);
-            const { data: exEvalData } = await typedSupabase.from('evaluaciones_examen').select('*').in('indicador_id', exIndIds) as { data: EvaluacionExamen[] | null };
+            // 5. Indicadores y evaluaciones de exámenes
+            const exIds: number[] = (exData || []).map((e: any) => e.id);
+            const { data: exIndData } = exIds.length > 0
+                ? await sqliteService.from('indicadores_examen').selectIn('id, examen_id', 'examen_id', exIds)
+                : { data: [] };
+            const exIndIds: number[] = (exIndData || []).map((i: any) => i.id);
+            const { data: exEvalData } = exIndIds.length > 0
+                ? await sqliteService.from('evaluaciones_examen').selectIn('*', 'indicador_id', exIndIds)
+                : { data: [] };
 
+            // Mapa de configuraciones: "fecha-periodo" -> lecciones_totales
             const configMap: Record<string, number> = {};
-            (configData || []).forEach(c => { configMap[`${c.fecha}-${c.periodo}`] = c.lecciones_totales; });
+            (configData || []).forEach((c: any) => {
+                configMap[`${c.fecha}-${c.periodo}`] = c.lecciones_totales;
+            });
 
-            // 4. Group data by student and calculate
-            const consolidated = students.map((est: Estudiante) => {
-                const getGradesForPeriod = (p: number) => {
-                    const currentTCs = (tcData || []).filter(t => t.periodo === p);
-                    const currentTCIds = currentTCs.map(t => t.id);
-
-                    // Cotidiano (35%)
-                    let tcAverage = 0;
-                    if (currentTCIds.length > 0) {
-                        let sumOfPercentages = 0;
-                        currentTCIds.forEach((tcId: number) => {
-                            const tcIndsForThis = (tcIndData || []).filter((i: any) => i.trabajo_id === tcId).map((i: any) => i.id);
-                            if (tcIndsForThis.length > 0) {
-                                const studentEvals = (tcEvalData || []).filter((ev: any) => ev.estudiante_id === est.cedula && tcIndsForThis.includes(ev.indicador_id));
-                                const points = studentEvals.reduce((acc: number, curr: any) => acc + (curr.puntaje || 0), 0);
-                                const max = tcIndsForThis.length * 3;
-                                sumOfPercentages += (points / max) * 100;
-                            }
-                        });
-                        tcAverage = (sumOfPercentages / currentTCIds.length) || 0;
-                    }
-                    const tcObtained = (tcAverage / 100) * 35;
-
-                    // Tareas (10%)
-                    let tarObtained = 0;
-                    const currentTareas = (tarData || []).filter((t: any) => t.periodo === p);
-                    if (currentTareas.length > 0) {
-                        currentTareas.forEach((tar: any) => {
-                            const inds = (tarIndData || []).filter((i: any) => i.tarea_id === tar.id).map((i: any) => i.id);
-                            const evals = (tarEvalData || []).filter((ev: any) => ev.estudiante_id === est.cedula && inds.includes(ev.indicador_id));
-                            const points = evals.reduce((acc: number, curr: any) => acc + (curr.puntaje || 0), 0);
-                            tarObtained += (points / tar.puntos_totales) * tar.porcentaje;
-                        });
-                    }
-
-                    // Examenes (50%)
-                    let exObtained = 0;
-                    const currentExams = (exData || []).filter((e: any) => e.periodo === p);
-                    if (currentExams.length > 0) {
-                        currentExams.forEach((ex: any) => {
-                            const inds = (exIndData || []).filter((i: any) => i.examen_id === ex.id).map((i: any) => i.id);
-                            const evals = (exEvalData || []).filter((ev: any) => ev.estudiante_id === est.cedula && inds.includes(ev.indicador_id));
-                            const points = evals.reduce((acc: number, curr: any) => acc + (curr.puntaje || 0), 0);
-                            exObtained += (points / ex.puntos_totales) * ex.porcentaje;
-                        });
-                    }
-
-                    // Asistencia (5%)
-                    const studentAtt = (attData || []).filter((a: any) => a.estudiante_id === est.cedula && a.periodo === p);
-                    const currentConfigs = (configData || []).filter((c: any) => c.periodo === p);
-                    const uniqueDatesForPeriod = Array.from(new Set(currentConfigs.map((c: any) => c.fecha)));
-                    let totalProgrammedLessonsForPeriod = 0;
-                    uniqueDatesForPeriod.forEach((d: any) => { totalProgrammedLessonsForPeriod += configMap[`${d}-${p}`] || 4; });
-
-                    let totalWeight = 0;
-                    studentAtt.forEach((att: any) => {
-                        if (!att.estados_asistencia?.es_justificada) {
-                            const lessonsToday = configMap[`${att.fecha}-${p}`] || 4;
-                            let weight = att.estados_asistencia?.peso_ausencia || 0;
-                            if (lessonsToday < 4 && weight > 0) {
-                                weight = (weight / 4) * lessonsToday;
-                            }
-                            totalWeight += weight;
+            // 6. Calcular consolidado por estudiante
+            const getGradesForPeriod = (est: Estudiante, p: number) => {
+                // Cotidiano (35%)
+                const currentTCIds = (tcData || []).filter((t: any) => t.periodo === p).map((t: any) => t.id);
+                let tcAverage = 0;
+                if (currentTCIds.length > 0) {
+                    let sumOfPercentages = 0;
+                    currentTCIds.forEach((tcId: number) => {
+                        const tcInds = (tcIndData || []).filter((i: any) => i.trabajo_id === tcId).map((i: any) => i.id);
+                        if (tcInds.length > 0) {
+                            const studentEvals = (tcEvalData || []).filter((ev: any) =>
+                                ev.estudiante_id === est.cedula && tcInds.includes(ev.indicador_id)
+                            );
+                            const points = studentEvals.reduce((acc: number, curr: any) => acc + (curr.puntaje || 0), 0);
+                            sumOfPercentages += (points / (tcInds.length * 3)) * 100;
                         }
                     });
-                    const flooredAbsences = Math.floor(totalWeight);
-                    const absenteeismPercentage = totalProgrammedLessonsForPeriod > 0 ? (flooredAbsences / totalProgrammedLessonsForPeriod) * 100 : 0;
-                    let attObtained = 0;
-                    if (absenteeismPercentage < 10) attObtained = 5;
-                    else if (absenteeismPercentage < 20) attObtained = 4;
-                    else if (absenteeismPercentage < 30) attObtained = 3;
-                    else if (absenteeismPercentage < 40) attObtained = 2;
-                    else if (absenteeismPercentage < 50) attObtained = 1;
-                    else attObtained = 0;
+                    tcAverage = (sumOfPercentages / currentTCIds.length) || 0;
+                }
+                const tcObtained = (tcAverage / 100) * 35;
 
-                    return { tcObtained, tarObtained, exObtained, attObtained, total: tcObtained + tarObtained + exObtained + attObtained };
-                };
+                // Tareas (variable %)
+                let tarObtained = 0;
+                (tarData || []).filter((t: any) => t.periodo === p).forEach((tar: any) => {
+                    const inds = (tarIndData || []).filter((i: any) => i.tarea_id === tar.id).map((i: any) => i.id);
+                    const evals = (tarEvalData || []).filter((ev: any) =>
+                        ev.estudiante_id === est.cedula && inds.includes(ev.indicador_id)
+                    );
+                    const points = evals.reduce((acc: number, curr: any) => acc + (curr.puntaje || 0), 0);
+                    tarObtained += (points / tar.puntos_totales) * tar.porcentaje;
+                });
 
+                // Exámenes (variable %)
+                let exObtained = 0;
+                (exData || []).filter((e: any) => e.periodo === p).forEach((ex: any) => {
+                    const inds = (exIndData || []).filter((i: any) => i.examen_id === ex.id).map((i: any) => i.id);
+                    const evals = (exEvalData || []).filter((ev: any) =>
+                        ev.estudiante_id === est.cedula && inds.includes(ev.indicador_id)
+                    );
+                    const points = evals.reduce((acc: number, curr: any) => acc + (curr.puntaje || 0), 0);
+                    exObtained += (points / ex.puntos_totales) * ex.porcentaje;
+                });
+
+                // Asistencia (5%)
+                const studentAtt = (attData || []).filter((a: any) => a.estudiante_id === est.cedula && a.periodo === p);
+                const currentConfigs = (configData || []).filter((c: any) => c.periodo === p);
+                const uniqueDates = Array.from(new Set(currentConfigs.map((c: any) => c.fecha)));
+                let totalProgrammed = 0;
+                uniqueDates.forEach((d: any) => { totalProgrammed += configMap[`${d}-${p}`] || 4; });
+
+                let totalWeight = 0;
+                studentAtt.forEach((att: any) => {
+                    if (!att.es_justificada) {
+                        const lessonsToday = configMap[`${att.fecha}-${p}`] || 4;
+                        let weight = att.peso_ausencia || 0;
+                        if (lessonsToday < 4 && weight > 0) {
+                            weight = (weight / 4) * lessonsToday;
+                        }
+                        totalWeight += weight;
+                    }
+                });
+                const flooredAbsences = Math.floor(totalWeight);
+                const absPercent = totalProgrammed > 0 ? (flooredAbsences / totalProgrammed) * 100 : 0;
+                let attObtained = 0;
+                if (absPercent < 10) attObtained = 5;
+                else if (absPercent < 20) attObtained = 4;
+                else if (absPercent < 30) attObtained = 3;
+                else if (absPercent < 40) attObtained = 2;
+                else if (absPercent < 50) attObtained = 1;
+
+                return { tcObtained, tarObtained, exObtained, attObtained, total: tcObtained + tarObtained + exObtained + attObtained };
+            };
+
+            const consolidated: ConsolidatedStudent[] = students.map(est => {
                 if (viewMode === 'semester') {
-                    const g = getGradesForPeriod(periodo);
+                    const g = getGradesForPeriod(est, periodo);
                     return {
                         cedula: est.cedula,
                         nombreCompleto: `${est.apellidos} ${est.nombre}`,
@@ -194,8 +205,8 @@ export const FinalReportPage: React.FC<Props> = ({ periodo }) => {
                         total: g.total.toFixed(2)
                     };
                 } else {
-                    const g1 = getGradesForPeriod(1);
-                    const g2 = getGradesForPeriod(2);
+                    const g1 = getGradesForPeriod(est, 1);
+                    const g2 = getGradesForPeriod(est, 2);
                     const annualTotal = (g1.total + g2.total) / 2;
                     return {
                         cedula: est.cedula,
@@ -226,18 +237,13 @@ export const FinalReportPage: React.FC<Props> = ({ periodo }) => {
             ...reportData.map(row => [
                 row.cedula,
                 `"${row.nombreCompleto}"`,
-                row.cotidiano,
-                row.tareas,
-                row.examenes,
-                row.asistencia,
-                row.total
+                row.cotidiano, row.tareas, row.examenes, row.asistencia, row.total
             ].join(','))
         ].join('\n');
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
+        link.setAttribute('href', URL.createObjectURL(blob));
         link.setAttribute('download', `Reporte_Final_${secciones.find(s => s.id === selectedSeccion)?.nombre || 'Seccion'}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
@@ -246,7 +252,6 @@ export const FinalReportPage: React.FC<Props> = ({ periodo }) => {
     };
 
     const handlePrint = () => { window.print(); };
-
     const filteredData = reportData.filter(row =>
         row.nombreCompleto.toLowerCase().includes(searchQuery.toLowerCase()) ||
         row.cedula.includes(searchQuery)
@@ -265,34 +270,8 @@ export const FinalReportPage: React.FC<Props> = ({ periodo }) => {
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }} className="no-print">
                     <div className="glass-card" style={{ display: 'flex', padding: '0.25rem', gap: '0.25rem' }}>
-                        <button
-                            onClick={() => setViewMode('semester')}
-                            style={{
-                                padding: '0.5rem 1rem',
-                                borderRadius: '6px',
-                                background: viewMode === 'semester' ? 'var(--primary)' : 'transparent',
-                                border: 'none',
-                                color: 'white',
-                                cursor: 'pointer',
-                                fontSize: '0.9rem'
-                            }}
-                        >
-                            Vista Semestral
-                        </button>
-                        <button
-                            onClick={() => setViewMode('annual')}
-                            style={{
-                                padding: '0.5rem 1rem',
-                                borderRadius: '6px',
-                                background: viewMode === 'annual' ? 'var(--primary)' : 'transparent',
-                                border: 'none',
-                                color: 'white',
-                                cursor: 'pointer',
-                                fontSize: '0.9rem'
-                            }}
-                        >
-                            Vista Anual
-                        </button>
+                        <button onClick={() => setViewMode('semester')} style={{ padding: '0.5rem 1rem', borderRadius: '6px', background: viewMode === 'semester' ? 'var(--primary)' : 'transparent', border: 'none', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}>Vista Semestral</button>
+                        <button onClick={() => setViewMode('annual')} style={{ padding: '0.5rem 1rem', borderRadius: '6px', background: viewMode === 'annual' ? 'var(--primary)' : 'transparent', border: 'none', color: 'white', cursor: 'pointer', fontSize: '0.9rem' }}>Vista Anual</button>
                     </div>
                     <select
                         value={selectedSeccion}
@@ -305,9 +284,7 @@ export const FinalReportPage: React.FC<Props> = ({ periodo }) => {
                     <button onClick={downloadCSV} className="btn-primary" style={{ background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', border: '1px solid #22c55e' }}>
                         📥 Exportar Excel (CSV)
                     </button>
-                    <button onClick={handlePrint} className="btn-primary">
-                        🖨️ Imprimir PDF
-                    </button>
+                    <button onClick={handlePrint} className="btn-primary">🖨️ Imprimir PDF</button>
                 </div>
             </header>
 
@@ -317,14 +294,7 @@ export const FinalReportPage: React.FC<Props> = ({ periodo }) => {
                     placeholder="Buscar por nombre o cédula..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    style={{
-                        width: '100%',
-                        background: 'none',
-                        border: 'none',
-                        color: 'white',
-                        fontSize: '1rem',
-                        padding: '0.5rem'
-                    }}
+                    style={{ width: '100%', background: 'none', border: 'none', color: 'white', fontSize: '1rem', padding: '0.5rem' }}
                 />
             </div>
 
@@ -372,56 +342,16 @@ export const FinalReportPage: React.FC<Props> = ({ periodo }) => {
             <style>{`
                 @media print {
                     @page { size: landscape; margin: 10mm; }
-                    html, body { 
-                        height: auto !important; 
-                        overflow: visible !important; 
-                        background: white !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                    }
-                    /* Reset layout for print */
+                    html, body { height: auto !important; overflow: visible !important; background: white !important; margin: 0 !important; padding: 0 !important; }
                     .app-layout { display: block !important; }
                     .sidebar { display: none !important; }
-                    .container { 
-                        padding: 0 !important; 
-                        margin: 0 !important; 
-                        max-width: none !important; 
-                        width: 100% !important; 
-                    }
-                    
+                    .container { padding: 0 !important; margin: 0 !important; max-width: none !important; width: 100% !important; }
                     .no-print { display: none !important; }
                     .only-print { display: block !important; }
-                    
-                    .report-page { 
-                        position: static !important; 
-                        width: 100% !important; 
-                        padding: 0 !important; 
-                        background: white !important; 
-                        display: block !important;
-                        overflow: visible !important;
-                    }
-                    .glass-card { 
-                        background: white !important; 
-                        border: none !important; 
-                        color: black !important; 
-                        box-shadow: none !important; 
-                        overflow: visible !important;
-                        display: block !important;
-                        backdrop-filter: none !important;
-                        -webkit-backdrop-filter: none !important;
-                    }
-                    table { 
-                        width: 100% !important; 
-                        border-collapse: collapse !important; 
-                        color: black !important;
-                        table-layout: auto !important;
-                    }
-                    th, td { 
-                        border: 1px solid black !important; 
-                        padding: 8px !important; 
-                        color: black !important;
-                        page-break-inside: avoid !important;
-                    }
+                    .report-page { position: static !important; width: 100% !important; padding: 0 !important; background: white !important; display: block !important; overflow: visible !important; }
+                    .glass-card { background: white !important; border: none !important; color: black !important; box-shadow: none !important; overflow: visible !important; display: block !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+                    table { width: 100% !important; border-collapse: collapse !important; color: black !important; table-layout: auto !important; }
+                    th, td { border: 1px solid black !important; padding: 8px !important; color: black !important; page-break-inside: avoid !important; }
                     th { background: #f0f0f0 !important; }
                     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                 }

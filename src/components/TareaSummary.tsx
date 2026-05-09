@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { sqliteService } from '../lib/sqliteService';
 
 interface TareaSummaryProps {
     seccionId: string;
@@ -12,41 +12,50 @@ export const TareaSummary: React.FC<TareaSummaryProps> = ({ seccionId, periodo, 
     const [seccionName, setSeccionName] = useState('');
     const [estudiantes, setEstudiantes] = useState<any[]>([]);
     const [tareas, setTareas] = useState<any[]>([]);
-    const [gradesMap, setGradesMap] = useState<Record<string, Record<number, { nota: number, obtenido: number }>>>({}); // student_id -> tarea_id -> grades
+    const [gradesMap, setGradesMap] = useState<Record<string, Record<number, { nota: number; obtenido: number }>>>({});
 
-    useEffect(() => {
-        fetchData();
-    }, [seccionId, periodo]);
+    useEffect(() => { fetchData(); }, [seccionId, periodo]);
 
     async function fetchData() {
         setLoading(true);
         try {
-            // Seccion info
-            const { data: secData } = await (supabase as any).from('secciones').select('nombre').eq('id', seccionId).single();
-            setSeccionName(secData?.nombre || '');
+            // 1. Nombre de la sección
+            const { data: secData } = await sqliteService.query(
+                'SELECT nombre FROM secciones WHERE id = ?', [seccionId]
+            );
+            setSeccionName(secData?.[0]?.nombre || '');
 
-            // Students
-            const { data: estData } = await supabase.from('estudiantes').select('*').eq('seccion_id', seccionId).order('apellidos');
+            // 2. Estudiantes
+            const { data: estData } = await sqliteService.query(
+                'SELECT * FROM estudiantes WHERE seccion_id = ? ORDER BY apellidos', [seccionId]
+            );
             const students = estData || [];
             setEstudiantes(students);
 
-            // Tasks
-            const { data: tarData } = await supabase.from('tareas').select('*').eq('seccion_id', seccionId).eq('periodo', periodo).order('id');
+            // 3. Tareas
+            const { data: tarData } = await sqliteService.query(
+                'SELECT * FROM tareas WHERE seccion_id = ? AND periodo = ? ORDER BY id',
+                [seccionId, periodo]
+            );
             const tasks = tarData || [];
             setTareas(tasks);
 
             if (tasks.length > 0) {
-                const tarIds = tasks.map((t: any) => t.id);
-                // Indicators
-                const { data: indData } = await (supabase as any).from('indicadores_tarea').select('*').in('tarea_id', tarIds);
+                const tarIds: number[] = tasks.map((t: any) => t.id);
+
+                // 4. Indicadores para esas tareas
+                const { data: indData } = await sqliteService.from('indicadores_tarea').selectIn('*', 'tarea_id', tarIds);
                 const indicators = indData || [];
 
-                // Evaluations
-                const { data: evalData } = await (supabase as any).from('evaluaciones_tarea').select('*').in('indicador_id', indicators.map((i: any) => i.id));
+                // 5. Evaluaciones para esos indicadores
+                const indIds: number[] = indicators.map((i: any) => i.id);
+                const { data: evalData } = indIds.length > 0
+                    ? await sqliteService.from('evaluaciones_tarea').selectIn('*', 'indicador_id', indIds)
+                    : { data: [] };
                 const evaluations = evalData || [];
 
-                // Calculate grades
-                const newGradesMap: any = {};
+                // 6. Calcular notas
+                const newGradesMap: Record<string, Record<number, { nota: number; obtenido: number }>> = {};
                 students.forEach((est: any) => {
                     newGradesMap[est.cedula] = {};
                     tasks.forEach((tar: any) => {
@@ -55,13 +64,10 @@ export const TareaSummary: React.FC<TareaSummaryProps> = ({ seccionId, periodo, 
                             ev.estudiante_id === est.cedula &&
                             tarInds.some((i: any) => i.id === ev.indicador_id)
                         );
-
                         let pointsPaid = 0;
                         studentEvals.forEach((ev: any) => { pointsPaid += ev.puntaje || 0; });
-
                         const nota = Math.round((pointsPaid / tar.puntos_totales) * 100) || 0;
                         const obtenido = Number(((nota / 100) * tar.porcentaje).toFixed(2));
-
                         newGradesMap[est.cedula][tar.id] = { nota, obtenido };
                     });
                 });
@@ -74,9 +80,7 @@ export const TareaSummary: React.FC<TareaSummaryProps> = ({ seccionId, periodo, 
         }
     }
 
-    const handlePrint = () => {
-        window.print();
-    };
+    const handlePrint = () => { window.print(); };
 
     return (
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '2rem' }}>
@@ -141,83 +145,20 @@ export const TareaSummary: React.FC<TareaSummaryProps> = ({ seccionId, periodo, 
                 <style>{`
                     @media print {
                         @page { size: landscape; margin: 10mm; }
-                        
-                        html, body { 
-                            height: auto !important; 
-                            overflow: visible !important; 
-                            background: white !important;
-                            margin: 0 !important;
-                            padding: 0 !important;
-                        }
-                        /* Reset layout for print */
+                        html, body { height: auto !important; overflow: visible !important; background: white !important; margin: 0 !important; padding: 0 !important; }
                         .app-layout { display: block !important; }
                         .sidebar { display: none !important; }
-                        .container { 
-                            padding: 0 !important; 
-                            margin: 0 !important; 
-                            max-width: none !important; 
-                            width: 100% !important; 
-                        }
-
-                        /* Ocultar todo lo que no sea el modal */
+                        .container { padding: 0 !important; margin: 0 !important; max-width: none !important; width: 100% !important; }
                         .no-print { display: none !important; }
                         .only-print { display: block !important; }
-                        
-                        /* Posicionar el modal como el elemento principal de la página */
-                        .modal-overlay { 
-                            position: static !important; 
-                            width: 100% !important; 
-                            background: white !important; 
-                            padding: 0 !important;
-                            display: block !important;
-                            overflow: visible !important;
-                        }
-                        
-                        .glass-card { 
-                            background: white !important; 
-                            border: none !important; 
-                            color: black !important; 
-                            width: 100% !important; 
-                            max-width: 100% !important;
-                            box-shadow: none !important;
-                            padding: 0 !important;
-                            overflow: visible !important;
-                            display: block !important;
-                            backdrop-filter: none !important;
-                            -webkit-backdrop-filter: none !important;
-                        }
-                        
+                        .modal-overlay { position: static !important; width: 100% !important; background: white !important; padding: 0 !important; display: block !important; overflow: visible !important; }
+                        .glass-card { background: white !important; border: none !important; color: black !important; width: 100% !important; max-width: 100% !important; box-shadow: none !important; padding: 0 !important; overflow: visible !important; display: block !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
                         h1, h2, h3, p, div, span { color: black !important; }
-                        
-                        table { 
-                            width: 100% !important; 
-                            border-collapse: collapse !important; 
-                            color: black !important; 
-                            font-size: 10pt !important;
-                            margin-top: 10px !important;
-                            table-layout: auto !important;
-                        }
-                        
-                        th { 
-                            border: 1px solid black !important; 
-                            color: black !important; 
-                            background: #f0f0f0 !important;
-                            padding: 8px !important;
-                        }
-                        
-                        td { 
-                            border: 1px solid black !important; 
-                            color: black !important; 
-                            padding: 8px !important;
-                            page-break-inside: avoid !important;
-                        }
-                        
+                        table { width: 100% !important; border-collapse: collapse !important; color: black !important; font-size: 10pt !important; margin-top: 10px !important; table-layout: auto !important; }
+                        th { border: 1px solid black !important; color: black !important; background: #f0f0f0 !important; padding: 8px !important; }
+                        td { border: 1px solid black !important; color: black !important; padding: 8px !important; page-break-inside: avoid !important; }
                         tr { page-break-inside: avoid; }
-                        
-                        * { 
-                            -webkit-print-color-adjust: exact !important; 
-                            print-color-adjust: exact !important; 
-                        }
+                        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                     }
                 `}</style>
             </div>

@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from './lib/supabase';
-import { Database } from './types/database';
+import { sqliteService } from './lib/sqliteService';
 
 import { AttendanceTable } from './components/AttendanceTable';
 import { Dashboard } from './components/Dashboard';
 import { SummaryReport } from './components/SummaryReport';
 import { AttendanceSummary } from './components/AttendanceSummary';
 import { ToastProvider } from './components/Toast';
+import { Login } from './components/Login';
 
 import { Sidebar } from './components/Sidebar';
 
@@ -16,9 +16,14 @@ import { TareasPage } from './components/TareasPage';
 import { ExamenesPage } from './components/ExamenesPage';
 import { FinalReportPage } from './components/FinalReportPage';
 
-type Seccion = Database['public']['Tables']['secciones']['Row'];
+interface Seccion {
+    id: string;
+    nombre: string;
+    nivel: number;
+}
 
 function App() {
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [currentView, setCurrentView] = useState<'attendance' | 'students' | 'cotidiano' | 'tareas' | 'examenes' | 'asistencia_nota' | 'reports'>('attendance');
     const [secciones, setSecciones] = useState<Seccion[]>([]);
     const [selectedSeccion, setSelectedSeccion] = useState<string | null>(null);
@@ -39,12 +44,11 @@ function App() {
     }, [currentView]);
 
     async function fetchSecciones() {
-        const { data, error } = await supabase.from('secciones').select('*').order('nombre');
+        const { data, error } = await sqliteService.query('SELECT * FROM secciones ORDER BY nombre');
         if (error) {
             console.error('Error fetching sections:', error);
         } else {
-            const seccionesData = data as Seccion[] | null;
-            setSecciones(seccionesData || []);
+            setSecciones(data || []);
         }
     }
 
@@ -80,9 +84,9 @@ function App() {
             return;
         }
 
-        const { error } = await supabase.from('secciones').delete().eq('id', id);
+        const { error } = await sqliteService.from('secciones').delete('id', id);
         if (error) {
-            alert(`Error al eliminar sección: ${error.message}`);
+            alert(`Error al eliminar sección: ${error}`);
         } else {
             console.log('Sección eliminada');
             fetchSecciones();
@@ -94,12 +98,16 @@ function App() {
 
     return (
         <ToastProvider>
-            <div className="app-layout">
-                <Sidebar
+            {!isAuthenticated ? (
+                <Login onLogin={() => setIsAuthenticated(true)} />
+            ) : (
+                <div className="app-layout">
+                    <Sidebar
                     currentView={currentView}
                     onViewChange={setCurrentView}
                     periodo={periodo}
                     onPeriodoChange={setPeriodo}
+                    onLogout={() => setIsAuthenticated(false)}
                 />
                 <main className="container" style={{ paddingBottom: '5rem' }}>
                     {currentView === 'attendance' ? (
@@ -306,8 +314,8 @@ function App() {
                     )}
                 </main>
             </div>
+            )}
         </ToastProvider>
-
     );
 }
 

@@ -1,11 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { Database } from '../types/database';
+import { sqliteService } from '../lib/sqliteService';
 import * as XLSX from 'xlsx';
 import { useToast } from './Toast';
 
-type Estudiante = Database['public']['Tables']['estudiantes']['Row'];
-type Seccion = Database['public']['Tables']['secciones']['Row'];
+interface Estudiante {
+    cedula: string;
+    nombre: string;
+    apellidos: string;
+    email: string;
+    seccion_id: string;
+}
+
+interface Seccion {
+    id: string;
+    nombre: string;
+    nivel: number;
+}
 
 export const StudentsPage: React.FC = () => {
     const [secciones, setSecciones] = useState<Seccion[]>([]);
@@ -33,7 +43,7 @@ export const StudentsPage: React.FC = () => {
     }, [selectedSeccion]);
 
     async function fetchSecciones() {
-        const { data, error } = await supabase.from('secciones').select('*').order('nombre');
+        const { data, error } = await sqliteService.query('SELECT * FROM secciones ORDER BY nombre');
         if (error) {
             showToast('Error al cargar secciones', 'error');
         } else {
@@ -46,11 +56,10 @@ export const StudentsPage: React.FC = () => {
 
     async function fetchStudents(seccionId: string) {
         setLoading(true);
-        const { data, error } = await supabase
-            .from('estudiantes')
-            .select('*')
-            .eq('seccion_id', seccionId)
-            .order('apellidos');
+        const { data, error } = await sqliteService.query(
+            'SELECT * FROM estudiantes WHERE seccion_id = ? ORDER BY apellidos',
+            [seccionId]
+        );
 
         if (error) {
             showToast('Error al cargar estudiantes', 'error');
@@ -83,18 +92,18 @@ export const StudentsPage: React.FC = () => {
 
             setImporting(true);
             try {
-                const { data: nuevaSeccion, error: createError } = await supabase
-                    .from('secciones')
-                    .insert({ nombre: fileName, nivel: nivelInferido })
-                    .select()
-                    .single();
+                const newId = `sec-${fileName}`;
+                const { error: createError } = await sqliteService.from('secciones').insert({
+                    id: newId,
+                    nombre: fileName,
+                    nivel: nivelInferido
+                });
 
-                if (createError) throw createError;
+                if (createError) throw new Error(createError);
 
-                // Actualizar lista de secciones localmente
-                const { data: todasSecciones } = await supabase.from('secciones').select('*').order('nombre');
+                const { data: todasSecciones } = await sqliteService.query('SELECT * FROM secciones ORDER BY nombre');
                 setSecciones(todasSecciones || []);
-                seccionEncontrada = nuevaSeccion as Seccion;
+                seccionEncontrada = { id: newId, nombre: fileName, nivel: nivelInferido };
             } catch (error: any) {
                 showToast(`Error al crear la sección: ${error.message}`, 'error');
                 setImporting(false);
@@ -112,42 +121,33 @@ export const StudentsPage: React.FC = () => {
                 const ws = wb.Sheets[wsname];
                 const data = XLSX.utils.sheet_to_json(ws) as any[];
 
-                // Validar campos: cedula, nombre, apellidos
                 if (data.length === 0 || !data[0].cedula || !data[0].nombre || !data[0].apellidos) {
                     showToast('El archivo debe contener las columnas: cedula, nombre, apellidos.', 'error');
                     setImporting(false);
                     return;
                 }
 
-                // Confirmar sobreescritura
                 if (!confirm(`Se sobreescribirán todos los estudiantes de la sección ${fileName}. ¿Deseas continuar?`)) {
                     setImporting(false);
                     return;
                 }
 
-                // 1. Eliminar existentes de la sección
-                const { error: deleteError } = await supabase
-                    .from('estudiantes')
-                    .delete()
-                    .eq('seccion_id', seccionEncontrada.id);
+                // Usar transacción para borrar e insertar masivamente
+                const queries = [
+                    { sql: 'DELETE FROM estudiantes WHERE seccion_id = ?', params: [seccionEncontrada.id] }
+                ];
 
-                if (deleteError) throw deleteError;
+                data.forEach(item => {
+                    queries.push({
+                        sql: 'INSERT INTO estudiantes (cedula, nombre, apellidos, seccion_id) VALUES (?, ?, ?, ?)',
+                        params: [String(item.cedula), String(item.nombre), String(item.apellidos), seccionEncontrada.id]
+                    });
+                });
 
-                // 2. Insertar nuevos
-                const filteredData = data.map(item => ({
-                    cedula: String(item.cedula),
-                    nombre: String(item.nombre),
-                    apellidos: String(item.apellidos),
-                    seccion_id: seccionEncontrada.id
-                }));
+                const { success, error: transError } = await sqliteService.transaction(queries);
+                if (!success) throw new Error(transError || 'Error en la transacción');
 
-                const { error: insertError } = await supabase
-                    .from('estudiantes')
-                    .insert(filteredData);
-
-                if (insertError) throw insertError;
-
-                showToast(`Se han importado ${filteredData.length} estudiantes a la sección ${fileName}.`, 'success');
+                showToast(`Se han importado ${data.length} estudiantes a la sección ${fileName}.`, 'success');
                 setSelectedSeccion(seccionEncontrada.id);
                 fetchStudents(seccionEncontrada.id);
             } catch (error: any) {
@@ -165,14 +165,14 @@ export const StudentsPage: React.FC = () => {
         if (!selectedSeccion) return;
 
         try {
-            const { error } = await supabase.from('estudiantes').insert({
+            const { error } = await sqliteService.from('estudiantes').insert({
                 cedula: newCedula,
                 nombre: newNombre,
                 apellidos: newApellidos,
                 seccion_id: selectedSeccion
             });
 
-            if (error) throw error;
+            if (error) throw new Error(error);
 
             showToast('Estudiante agregado correctamente', 'success');
             setNewCedula('');
@@ -188,12 +188,9 @@ export const StudentsPage: React.FC = () => {
         if (!confirm('¿Estás seguro de eliminar este estudiante?')) return;
 
         try {
-            const { error } = await supabase
-                .from('estudiantes')
-                .delete()
-                .eq('cedula', cedula);
+            const { error } = await sqliteService.from('estudiantes').delete('cedula', cedula);
 
-            if (error) throw error;
+            if (error) throw new Error(error);
 
             showToast('Estudiante eliminado', 'success');
             fetchStudents(selectedSeccion);

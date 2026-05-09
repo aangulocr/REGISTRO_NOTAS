@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { Database } from '../types/database';
+import { sqliteService } from '../lib/sqliteService';
 
 interface CotidianoSummaryProps {
     seccionId: string;
@@ -16,38 +15,43 @@ export const CotidianoSummary: React.FC<CotidianoSummaryProps> = ({ seccionId, p
     const [evaluaciones, setEvaluaciones] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        fetchData();
-    }, [seccionId, periodo]);
+    useEffect(() => { fetchData(); }, [seccionId, periodo]);
 
     async function fetchData() {
         setLoading(true);
         try {
-            // 1. Fetch Section Name
-            const { data: secData } = await supabase.from('secciones').select('nombre').eq('id', seccionId).single();
-            setSeccionNombre((secData as any)?.nombre || '');
+            // 1. Nombre de la sección
+            const { data: secData } = await sqliteService.query(
+                'SELECT nombre FROM secciones WHERE id = ?', [seccionId]
+            );
+            setSeccionNombre(secData?.[0]?.nombre || '');
 
-            // 2. Fetch Students
-            const { data: estData } = await supabase.from('estudiantes').select('*').eq('seccion_id', seccionId).order('apellidos');
+            // 2. Estudiantes
+            const { data: estData } = await sqliteService.query(
+                'SELECT * FROM estudiantes WHERE seccion_id = ? ORDER BY apellidos', [seccionId]
+            );
             setEstudiantes(estData || []);
 
-            // 3. Fetch TCs for this section and period
-            const { data: tcData } = await supabase.from('trabajos_cotidianos').select('*').eq('seccion_id', seccionId).eq('periodo', periodo).order('id');
+            // 3. Trabajos cotidianos
+            const { data: tcData } = await sqliteService.query(
+                'SELECT * FROM trabajos_cotidianos WHERE seccion_id = ? AND periodo = ? ORDER BY id',
+                [seccionId, periodo]
+            );
             const currentTrabajos = tcData || [];
             setTrabajos(currentTrabajos);
 
             if (currentTrabajos.length > 0) {
-                const tcIds = currentTrabajos.map((t: any) => t.id);
+                const tcIds: number[] = currentTrabajos.map((t: any) => t.id);
 
-                // 4. Fetch Indicators for these TCs
-                const { data: indData } = await (supabase as any).from('indicadores').select('*').in('trabajo_id', tcIds);
+                // 4. Indicadores para esos TCs
+                const { data: indData } = await sqliteService.from('indicadores').selectIn('*', 'trabajo_id', tcIds);
                 setIndicadores(indData || []);
 
-                const indIds = (indData || []).map((i: any) => i.id);
+                const indIds: number[] = (indData || []).map((i: any) => i.id);
 
-                // 5. Fetch Evaluations for these Indicators
+                // 5. Evaluaciones para esos indicadores
                 if (indIds.length > 0) {
-                    const { data: evalData } = await (supabase as any).from('evaluaciones_cotidiano').select('*').in('indicador_id', indIds);
+                    const { data: evalData } = await sqliteService.from('evaluaciones_cotidiano').selectIn('*', 'indicador_id', indIds);
                     setEvaluaciones(evalData || []);
                 }
             }
@@ -58,7 +62,7 @@ export const CotidianoSummary: React.FC<CotidianoSummaryProps> = ({ seccionId, p
         }
     }
 
-    const [gradesMap, setGradesMap] = useState<Record<string, Record<number, number>>>({}); // studentId -> tcId -> grade
+    const [gradesMap, setGradesMap] = useState<Record<string, Record<number, number>>>({});
 
     useEffect(() => {
         if (estudiantes.length > 0 && trabajos.length > 0) {
@@ -68,14 +72,15 @@ export const CotidianoSummary: React.FC<CotidianoSummaryProps> = ({ seccionId, p
 
     const calculateAllGrades = () => {
         const newGradesMap: Record<string, Record<number, number>> = {};
-
         estudiantes.forEach(est => {
             newGradesMap[est.cedula] = {};
             trabajos.forEach(tc => {
                 const tcIndicators = indicadores.filter(ind => ind.trabajo_id === tc.id);
                 if (tcIndicators.length > 0) {
-                    const tcIndIds = tcIndicators.map(i => i.id);
-                    const studentEvals = evaluaciones.filter(ev => ev.estudiante_id === est.cedula && tcIndIds.includes(ev.indicador_id));
+                    const tcIndIds = tcIndicators.map((i: any) => i.id);
+                    const studentEvals = evaluaciones.filter(ev =>
+                        ev.estudiante_id === est.cedula && tcIndIds.includes(ev.indicador_id)
+                    );
                     const totalPoints = studentEvals.reduce((acc, curr) => acc + (curr.puntaje || 0), 0);
                     const maxPoints = tcIndicators.length * 3;
                     newGradesMap[est.cedula][tc.id] = Math.round((totalPoints / maxPoints) * 100) || 0;
@@ -87,9 +92,7 @@ export const CotidianoSummary: React.FC<CotidianoSummaryProps> = ({ seccionId, p
         setGradesMap(newGradesMap);
     };
 
-    const handlePrint = () => {
-        window.print();
-    };
+    const handlePrint = () => { window.print(); };
 
     if (loading) return (
         <div className="modal-overlay">
@@ -137,9 +140,7 @@ export const CotidianoSummary: React.FC<CotidianoSummaryProps> = ({ seccionId, p
                                 {estudiantes.map(est => {
                                     const studentGrades = gradesMap[est.cedula] || {};
                                     let totalSum = 0;
-                                    trabajos.forEach(t => {
-                                        totalSum += studentGrades[t.id] || 0;
-                                    });
+                                    trabajos.forEach(t => { totalSum += studentGrades[t.id] || 0; });
                                     const average = trabajos.length > 0 ? Math.round(totalSum / trabajos.length) : 0;
 
                                     return (
@@ -166,89 +167,19 @@ export const CotidianoSummary: React.FC<CotidianoSummaryProps> = ({ seccionId, p
 
                 <style>{`
                     @media print {
-                        @page { 
-                            size: landscape; 
-                            margin: 10mm; 
-                        }
-                        
-                        html, body { 
-                            height: auto !important; 
-                            overflow: visible !important; 
-                            background: white !important;
-                            margin: 0 !important;
-                            padding: 0 !important;
-                        }
-                        /* Reset layout for print */
+                        @page { size: landscape; margin: 10mm; }
+                        html, body { height: auto !important; overflow: visible !important; background: white !important; margin: 0 !important; padding: 0 !important; }
                         .app-layout { display: block !important; }
                         .sidebar { display: none !important; }
-                        .container { 
-                            padding: 0 !important; 
-                            margin: 0 !important; 
-                            max-width: none !important; 
-                            width: 100% !important; 
-                        }
-                        
-                        .no-print {
-                            display: none !important;
-                        }
- 
-                        .only-print {
-                            display: block !important;
-                            color: black !important;
-                            margin-bottom: 2rem !important;
-                        }
-                        
-                        .modal-overlay {
-                            position: static !important;
-                            width: 100% !important;
-                            height: auto !important;
-                            background: white !important;
-                            display: block !important;
-                            padding: 0 !important;
-                            margin: 0 !important;
-                            overflow: visible !important;
-                        }
- 
-                        .glass-card {
-                            background: white !important;
-                            color: black !important;
-                            box-shadow: none !important;
-                            border: none !important;
-                            width: 100% !important;
-                            max-width: 100% !important;
-                            padding: 0 !important;
-                            overflow: visible !important;
-                            display: block !important;
-                            backdrop-filter: none !important;
-                            -webkit-backdrop-filter: none !important;
-                        }
- 
-                        table {
-                            width: 100% !important;
-                            border-collapse: collapse !important;
-                            color: black !important;
-                            font-size: 9pt !important;
-                            table-layout: auto !important;
-                        }
- 
-                        th {
-                            color: black !important;
-                            border-bottom: 2px solid black !important;
-                            padding: 8px !important;
-                        }
- 
-                        td {
-                            color: black !important;
-                            border-bottom: 1px solid #ccc !important;
-                            padding: 6px !important;
-                            page-break-inside: avoid !important;
-                        }
- 
-                        /* Ensure text colors are printed */
-                        * {
-                            -webkit-print-color-adjust: exact !important;
-                            print-color-adjust: exact !important;
-                        }
+                        .container { padding: 0 !important; margin: 0 !important; max-width: none !important; width: 100% !important; }
+                        .no-print { display: none !important; }
+                        .only-print { display: block !important; color: black !important; margin-bottom: 2rem !important; }
+                        .modal-overlay { position: static !important; width: 100% !important; height: auto !important; background: white !important; display: block !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; }
+                        .glass-card { background: white !important; color: black !important; box-shadow: none !important; border: none !important; width: 100% !important; max-width: 100% !important; padding: 0 !important; overflow: visible !important; display: block !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+                        table { width: 100% !important; border-collapse: collapse !important; color: black !important; font-size: 9pt !important; table-layout: auto !important; }
+                        th { color: black !important; border-bottom: 2px solid black !important; padding: 8px !important; }
+                        td { color: black !important; border-bottom: 1px solid #ccc !important; padding: 6px !important; page-break-inside: avoid !important; }
+                        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                     }
                 `}</style>
             </div>
