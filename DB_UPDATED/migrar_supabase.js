@@ -28,7 +28,10 @@ const TABLES_DATA_ONLY = [
     'evaluaciones_tarea',
     'examenes',
     'indicadores_examen',
-    'evaluaciones_examen'
+    'evaluaciones_examen',
+    'notas_directas_examen',
+    'notas_directas_cotidiano',
+    'notas_directas_tarea'
 ];
 
 function normalizeDate(val, col) {

@@ -105,6 +105,17 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
             setIndicadores(indData || []);
 
             const indIds: number[] = (indData || []).map((i: IndicadorExamen) => i.id);
+            
+            // Load direct grades
+            const { data: directNotesData } = await sqliteService.from('notas_directas_examen').selectWhere('*', 'examen_id', parseInt(examenId));
+            if (isMounted) {
+                const directNotesMap: Record<string, string> = {};
+                (directNotesData || []).forEach((n: any) => {
+                    directNotesMap[n.estudiante_id] = String(n.nota);
+                });
+                setNotasFinalesDirectas(directNotesMap);
+            }
+
             if (indIds.length > 0) {
                 const { data: evalData } = await sqliteService.from('evaluaciones_examen').selectIn('*', 'indicador_id', indIds);
                 if (!isMounted) return;
@@ -129,10 +140,40 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
             ...prev,
             [estudianteId]: { ...(prev[estudianteId] || {}), [indicadorId]: score }
         }));
+
+        // Si el usuario cambia manualmente un indicador, eliminamos el override de nota directa
+        if (notasFinalesDirectas[estudianteId]) {
+            setNotasFinalesDirectas(prev => {
+                const updated = { ...prev };
+                delete updated[estudianteId];
+                return updated;
+            });
+        }
     };
 
     const handleNotaFinalDirecta = (estudianteId: string, value: string) => {
-        setNotasFinalesDirectas(prev => ({ ...prev, [estudianteId]: value }));
+        // Validar que la nota esté entre 0 y 100
+        let val = value;
+        if (value !== '') {
+            const num = parseFloat(value);
+            if (isNaN(num)) val = '';
+            else if (num < 0) val = '0';
+            else if (num > 100) val = '100';
+            else val = String(num);
+        }
+
+        setNotasFinalesDirectas(prev => ({ ...prev, [estudianteId]: val }));
+        
+        // If a direct note is entered, clear the indicator scores to avoid confusion
+        if (val !== '') {
+            setEvaluaciones(prev => {
+                const updated = { ...(prev[estudianteId] || {}) };
+                indicadores.forEach(ind => {
+                    updated[String(ind.id)] = 0;
+                });
+                return { ...prev, [estudianteId]: updated };
+            });
+        }
     };
 
     const handleToggleAllScores = (estudianteId: string) => {
@@ -144,6 +185,15 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
             indicadores.forEach(ind => { updated[String(ind.id)] = newScore; });
             return { ...prev, [estudianteId]: updated };
         });
+
+        // Al usar el botón MAX/MIN, también eliminamos el override de nota directa
+        if (notasFinalesDirectas[estudianteId]) {
+            setNotasFinalesDirectas(prev => {
+                const updated = { ...prev };
+                delete updated[estudianteId];
+                return updated;
+            });
+        }
     };
 
     const calculateGrades = (estudianteId: string) => {
@@ -184,8 +234,42 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
                     upsertData,
                     { onConflict: 'estudiante_id, indicador_id' }
                 );
-                if (!success) throw new Error(error || 'Error al guardar');
+                if (!success) throw new Error(error || 'Error al guardar evaluaciones');
             }
+
+            // Save direct grades
+            const directNotesData: any[] = [];
+            Object.entries(notasFinalesDirectas).forEach(([cedula, nota]) => {
+                if (nota !== '') {
+                    directNotesData.push({
+                        id: `dn-${selectedExamen}-${cedula}`,
+                        examen_id: parseInt(selectedExamen),
+                        estudiante_id: cedula,
+                        nota: parseFloat(nota)
+                    });
+                }
+            });
+
+            // Delete direct notes that were cleared
+            const studentsToClear = estudiantes
+                .filter(est => !notasFinalesDirectas[est.cedula] || notasFinalesDirectas[est.cedula] === '')
+                .map(est => est.cedula);
+            
+            if (studentsToClear.length > 0) {
+                await sqliteService.query(
+                    `DELETE FROM notas_directas_examen WHERE examen_id = ? AND estudiante_id IN (${studentsToClear.map(() => '?').join(',')})`,
+                    [parseInt(selectedExamen), ...studentsToClear]
+                );
+            }
+
+            if (directNotesData.length > 0) {
+                const { success, error } = await sqliteService.from('notas_directas_examen').upsert(
+                    directNotesData,
+                    { onConflict: 'id' }
+                );
+                if (!success) throw new Error(error || 'Error al guardar notas directas');
+            }
+
             showToast('Evaluaciones de examen guardadas', 'success');
         } catch (error: any) {
             showToast(`Error: ${error.message}`, 'error');
@@ -269,7 +353,7 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
             {!showManager ? (
                 <div className="evaluation-view">
                     <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3rem', flex: 1, marginRight: '2rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                 <label style={{ fontSize: '1rem', fontWeight: 'bold', color: 'var(--primary)' }}>CALIFICAR:</label>
                                 <select
@@ -283,7 +367,7 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
                                 </select>
                             </div>
                             {selectedExamen && (
-                                <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.9rem' }}>
+                                <div style={{ display: 'flex', gap: '2.5rem', fontSize: '0.9rem' }}>
                                     <div style={{ color: 'var(--primary)' }}><strong>Puntos Totales:</strong> {examenes.find(e => String(e.id) === selectedExamen)?.puntos_totales}</div>
                                     <div style={{ color: 'var(--primary)' }}><strong>Valor:</strong> {examenes.find(e => String(e.id) === selectedExamen)?.porcentaje}%</div>
                                 </div>
@@ -319,8 +403,8 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
                                                 <div style={{ fontSize: '0.55rem', fontWeight: 400, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '40px' }}>{ind.titulo}</div>
                                             </th>
                                         ))}
-                                        <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.7rem', color: '#facc15', fontWeight: 700 }}>DIR.</th>
-                                        <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>NOTA</th>
+                                        <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.7rem', color: '#facc15', fontWeight: 700 }}>NOTA FINAL</th>
+                                        <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>CALIF.</th>
                                         <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>%</th>
                                     </tr>
                                 </thead>

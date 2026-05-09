@@ -141,6 +141,7 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
     };
 
     const handleGeneralToggle = (cedula: string) => {
+        if (leccionesTotales === 0) return;
         setAsistencias(prev => {
             const isPresent = prev[cedula].every(l => l === 'P');
             return {
@@ -196,7 +197,7 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
                 <div className="glass-card" style={{ padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)', fontWeight: 600 }}>Lecciones Impartidas hoy:</label>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        {[1, 2, 3, 4].map(num => (
+                        {[0, 1, 2, 3, 4].map(num => (
                             <button
                                 key={num}
                                 onClick={() => setLeccionesTotales(num)}
@@ -209,10 +210,14 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
                                     color: 'white',
                                     cursor: 'pointer',
                                     fontWeight: 'bold',
-                                    transition: 'all 0.2s'
+                                    transition: 'all 0.2s',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: num === 0 ? '1.1rem' : '1rem'
                                 }}
                             >
-                                {num}
+                                {num === 0 ? 'Ø' : num}
                             </button>
                         ))}
                     </div>
@@ -266,10 +271,11 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
                             <th style={{ textAlign: 'left', padding: '1rem 1.5rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Cédula</th>
                             <th style={{ textAlign: 'left', padding: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Nombre del Estudiante</th>
                             <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Estado General</th>
-                            <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>L1</th>
+                            {leccionesTotales >= 1 && <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>L1</th>}
                             {leccionesTotales >= 2 && <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>L2</th>}
                             {leccionesTotales >= 3 && <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>L3</th>}
                             {leccionesTotales >= 4 && <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>L4</th>}
+                            {leccionesTotales === 0 && <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--danger)', textTransform: 'uppercase', fontStyle: 'italic' }}>Sin Lecciones</th>}
                         </tr>
                     </thead>
                     <tbody>
@@ -305,14 +311,15 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
                                             style={{
                                                 width: '60px',
                                                 height: '28px',
-                                                background: isPresent ? 'var(--primary)' : 'rgba(255,255,255,0.1)',
+                                                background: leccionesTotales === 0 ? 'rgba(255,255,255,0.02)' : (isPresent ? 'var(--primary)' : 'rgba(255,255,255,0.1)'),
                                                 borderRadius: '14px',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 padding: '0 4px',
-                                                cursor: 'pointer',
+                                                cursor: leccionesTotales === 0 ? 'default' : 'pointer',
                                                 transition: 'all 0.3s ease',
-                                                position: 'relative'
+                                                position: 'relative',
+                                                opacity: leccionesTotales === 0 ? 0.3 : 1
                                             }}
                                         >
                                             <div style={{
@@ -327,19 +334,24 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
                                                 fontSize: '10px'
-                                            }}>{isPresent ? '✓' : ''}</div>
+                                            }}>{isPresent && leccionesTotales > 0 ? '✓' : ''}</div>
                                             <span style={{
                                                 position: 'absolute',
                                                 left: isPresent ? '8px' : '26px',
                                                 fontSize: '9px',
                                                 fontWeight: 700,
-                                                color: isPresent ? 'white' : 'var(--danger)',
+                                                color: leccionesTotales === 0 ? 'var(--text-muted)' : (isPresent ? 'white' : 'var(--danger)'),
                                                 pointerEvents: 'none'
                                             }}>
-                                                {isPresent ? 'PRES' : 'AUSEN'}
+                                                {leccionesTotales === 0 ? 'N/A' : (isPresent ? 'PRES' : 'AUSEN')}
                                             </span>
                                         </div>
                                     </td>
+                                    {leccionesTotales === 0 && (
+                                        <td colSpan={1} style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                                            No aplica
+                                        </td>
+                                    )}
                                     {[0, 1, 2, 3].slice(0, leccionesTotales).map(idx => (
                                         <td key={idx} style={{ padding: '1rem', textAlign: 'center' }}>
                                             <button

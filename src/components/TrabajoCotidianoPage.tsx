@@ -103,6 +103,17 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
             setIndicadores(indData || []);
 
             const indIds: number[] = (indData || []).map((i: Indicador) => i.id);
+            
+            // Load direct grades
+            const { data: directNotesData } = await sqliteService.from('notas_directas_cotidiano').selectWhere('*', 'trabajo_id', parseInt(trabajoId));
+            if (isMounted) {
+                const directNotesMap: Record<string, string> = {};
+                (directNotesData || []).forEach((n: any) => {
+                    directNotesMap[n.estudiante_id] = String(n.nota);
+                });
+                setNotasFinalesDirectas(directNotesMap);
+            }
+
             if (indIds.length > 0) {
                 const { data: evalData } = await sqliteService.from('evaluaciones_cotidiano').selectIn('*', 'indicador_id', indIds);
                 if (!isMounted) return;
@@ -127,10 +138,40 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
             ...prev,
             [estudianteId]: { ...(prev[estudianteId] || {}), [indicadorId]: score }
         }));
+
+        // Si el usuario cambia manualmente un indicador, eliminamos el override de nota directa
+        if (notasFinalesDirectas[estudianteId]) {
+            setNotasFinalesDirectas(prev => {
+                const updated = { ...prev };
+                delete updated[estudianteId];
+                return updated;
+            });
+        }
     };
 
     const handleNotaFinalDirecta = (estudianteId: string, value: string) => {
-        setNotasFinalesDirectas(prev => ({ ...prev, [estudianteId]: value }));
+        // Validar que la nota esté entre 0 y 100
+        let val = value;
+        if (value !== '') {
+            const num = parseFloat(value);
+            if (isNaN(num)) val = '';
+            else if (num < 0) val = '0';
+            else if (num > 100) val = '100';
+            else val = String(num);
+        }
+
+        setNotasFinalesDirectas(prev => ({ ...prev, [estudianteId]: val }));
+        
+        // If a direct note is entered, clear the indicator scores to avoid confusion
+        if (val !== '') {
+            setEvaluaciones(prev => {
+                const updated = { ...(prev[estudianteId] || {}) };
+                indicadores.forEach(ind => {
+                    updated[String(ind.id)] = 0;
+                });
+                return { ...prev, [estudianteId]: updated };
+            });
+        }
     };
 
     const calculateNota = (estudianteId: string) => {
@@ -155,6 +196,15 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
             indicadores.forEach(ind => { updated[String(ind.id)] = newScore; });
             return { ...prev, [estudianteId]: updated };
         });
+
+        // Al usar el botón MAX/MIN, también eliminamos el override de nota directa
+        if (notasFinalesDirectas[estudianteId]) {
+            setNotasFinalesDirectas(prev => {
+                const updated = { ...prev };
+                delete updated[estudianteId];
+                return updated;
+            });
+        }
     };
 
     async function saveEvaluations() {
@@ -179,8 +229,42 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                     upsertData,
                     { onConflict: 'estudiante_id, indicador_id' }
                 );
-                if (!success) throw new Error(error || 'Error al guardar');
+                if (!success) throw new Error(error || 'Error al guardar evaluaciones');
             }
+
+            // Save direct grades
+            const directNotesData: any[] = [];
+            Object.entries(notasFinalesDirectas).forEach(([cedula, nota]) => {
+                if (nota !== '') {
+                    directNotesData.push({
+                        id: `dn-tc-${selectedTrabajo}-${cedula}`,
+                        trabajo_id: parseInt(selectedTrabajo),
+                        estudiante_id: cedula,
+                        nota: parseFloat(nota)
+                    });
+                }
+            });
+
+            // Delete direct notes that were cleared
+            const studentsToClear = estudiantes
+                .filter(est => !notasFinalesDirectas[est.cedula] || notasFinalesDirectas[est.cedula] === '')
+                .map(est => est.cedula);
+            
+            if (studentsToClear.length > 0) {
+                await sqliteService.query(
+                    `DELETE FROM notas_directas_cotidiano WHERE trabajo_id = ? AND estudiante_id IN (${studentsToClear.map(() => '?').join(',')})`,
+                    [parseInt(selectedTrabajo), ...studentsToClear]
+                );
+            }
+
+            if (directNotesData.length > 0) {
+                const { success, error } = await sqliteService.from('notas_directas_cotidiano').upsert(
+                    directNotesData,
+                    { onConflict: 'id' }
+                );
+                if (!success) throw new Error(error || 'Error al guardar notas directas');
+            }
+
             showToast('Evaluaciones guardadas', 'success');
         } catch (error: any) {
             showToast(`Error: ${error.message}`, 'error');
@@ -282,17 +366,24 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
             {!showManager ? (
                 <div className="evaluation-view">
                     <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Trabajo:</label>
-                            <select
-                                value={selectedTrabajo}
-                                onChange={e => setSelectedTrabajo(e.target.value)}
-                                className="glass-card"
-                                style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: 'none' }}
-                            >
-                                {trabajos.map(t => <option key={t.id} value={t.id} style={{ background: '#1e1b4b' }}>{t.nombre}</option>)}
-                                {trabajos.length === 0 && <option value="">No hay trabajos creados</option>}
-                            </select>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3rem', flex: 1, marginRight: '2rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <label style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Trabajo:</label>
+                                <select
+                                    value={selectedTrabajo}
+                                    onChange={e => setSelectedTrabajo(e.target.value)}
+                                    className="glass-card"
+                                    style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: 'none' }}
+                                >
+                                    {trabajos.map(t => <option key={t.id} value={t.id} style={{ background: '#1e1b4b' }}>{t.nombre}</option>)}
+                                    {trabajos.length === 0 && <option value="">No hay trabajos creados</option>}
+                                </select>
+                            </div>
+                            {selectedTrabajo && (
+                                <div style={{ display: 'flex', gap: '2.5rem', fontSize: '0.9rem' }}>
+                                    <div style={{ color: 'var(--primary)' }}><strong>Puntos Totales:</strong> {indicadores.length * 3}</div>
+                                </div>
+                            )}
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
                             <button onClick={saveEvaluations} disabled={isSaving || !selectedTrabajo} className="btn-primary">
@@ -320,18 +411,18 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
                                     <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--glass-border)' }}>
-                                        <th style={{ textAlign: 'left', padding: '1rem 1.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Estudiante</th>
-                                        <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>All</th>
+                                        <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)', position: 'sticky', left: 0, zIndex: 10, background: '#111827', minWidth: '200px' }}>Estudiante</th>
+                                        <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}>M/M</th>
                                         {indicadores.map((ind, idx) => (
-                                            <th key={ind.id} style={{ textAlign: 'center', padding: '1rem', fontSize: '0.7rem', maxWidth: '120px' }} title={ind.titulo}>
+                                            <th key={ind.id} style={{ textAlign: 'center', padding: '0.5rem 0.2rem', fontSize: '0.7rem', width: '45px', minWidth: '45px', maxWidth: '45px' }} title={ind.titulo}>
                                                 I{idx + 1}
-                                                <div style={{ fontSize: '0.6rem', fontWeight: 400, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                <div style={{ fontSize: '0.55rem', fontWeight: 400, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '40px' }}>
                                                     {ind.titulo}
                                                 </div>
                                             </th>
                                         ))}
-                                        <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.75rem', color: '#facc15', fontWeight: 700 }}>NOTA<br/>FINAL</th>
-                                        <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 700 }}>NOTA</th>
+                                        <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.7rem', color: '#facc15', fontWeight: 700 }}>NOTA FINAL</th>
+                                        <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>CALIF.</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -344,24 +435,24 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                                         const tieneNotaDirecta = notaDirecta !== '';
                                         return (
                                             <tr key={est.cedula} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: tieneNotaDirecta ? 'rgba(250,204,21,0.03)' : 'transparent' }}>
-                                                <td style={{ padding: '1rem 1.5rem' }}>
+                                                <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', position: 'sticky', left: 0, zIndex: 5, background: tieneNotaDirecta ? '#1a180e' : '#111827', whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem' }}>{initials}</div>
-                                                        <div style={{ fontSize: '0.9rem' }}>{est.nombre} {est.apellidos}</div>
+                                                        <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem' }}>{initials}</div>
+                                                        <div>{est.nombre} {est.apellidos}</div>
                                                     </div>
                                                 </td>
-                                                <td style={{ textAlign: 'center' }}>
+                                                <td style={{ textAlign: 'center', padding: '0.25rem' }}>
                                                     <button
                                                         onClick={() => handleToggleAllScores(est.cedula)}
-                                                        style={{ fontSize: '9px', padding: '4px 8px', borderRadius: '8px', background: allAreThree ? 'var(--danger)' : 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s' }}
+                                                        style={{ fontSize: '8px', padding: '4px 6px', borderRadius: '6px', background: allAreThree ? 'var(--danger)' : 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
                                                     >
-                                                        {allAreThree ? 'CERO' : 'MAX'}
+                                                        {allAreThree ? 'MIN' : 'MAX'}
                                                     </button>
                                                 </td>
                                                 {indicadores.map(ind => {
                                                     const score = evaluaciones[est.cedula]?.[String(ind.id)] ?? 0;
                                                     return (
-                                                        <td key={ind.id} style={{ textAlign: 'center', padding: '0.5rem' }}>
+                                                        <td key={ind.id} style={{ textAlign: 'center', padding: '0.25rem' }}>
                                                             <input
                                                                 type="number"
                                                                 min={0}
@@ -370,22 +461,22 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                                                                 onChange={e => handleScoreChange(est.cedula, ind.id, e.target.value)}
                                                                 title={`${ind.titulo} (0-3)`}
                                                                 style={{
-                                                                    width: '48px',
+                                                                    width: '38px',
                                                                     textAlign: 'center',
                                                                     background: 'rgba(255,255,255,0.07)',
                                                                     border: '1px solid rgba(99,102,241,0.3)',
                                                                     borderRadius: '6px',
                                                                     color: 'white',
-                                                                    fontSize: '0.9rem',
+                                                                    fontSize: '0.85rem',
                                                                     fontWeight: 700,
-                                                                    padding: '4px 2px',
+                                                                    padding: '4px 0',
                                                                     outline: 'none'
                                                                 }}
                                                             />
                                                         </td>
                                                     );
                                                 })}
-                                                <td style={{ textAlign: 'center', padding: '0.5rem' }}>
+                                                <td style={{ textAlign: 'center', padding: '0.25rem' }}>
                                                     <input
                                                         type="number"
                                                         min={0}
@@ -395,21 +486,21 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                                                         onChange={e => handleNotaFinalDirecta(est.cedula, e.target.value)}
                                                         title="Nota Final Directa (sobreescribe rúbrica)"
                                                         style={{
-                                                            width: '58px',
+                                                            width: '46px',
                                                             textAlign: 'center',
                                                             background: tieneNotaDirecta ? 'rgba(250,204,21,0.15)' : 'rgba(255,255,255,0.05)',
                                                             border: `1px solid ${tieneNotaDirecta ? '#facc15' : 'rgba(255,255,255,0.1)'}`,
                                                             borderRadius: '6px',
                                                             color: tieneNotaDirecta ? '#facc15' : 'var(--text-muted)',
-                                                            fontSize: '0.9rem',
+                                                            fontSize: '0.85rem',
                                                             fontWeight: 700,
-                                                            padding: '4px 2px',
+                                                            padding: '4px 0',
                                                             outline: 'none'
                                                         }}
                                                     />
                                                 </td>
-                                                <td style={{ textAlign: 'center', fontWeight: 700, color: nota >= 70 ? 'var(--primary)' : 'var(--danger)' }}>
-                                                    {nota}
+                                                <td style={{ textAlign: 'center', fontWeight: 700, color: nota >= 70 ? 'var(--primary)' : 'var(--danger)', fontSize: '0.85rem' }}>
+                                                    {nota}%
                                                 </td>
                                             </tr>
                                         );

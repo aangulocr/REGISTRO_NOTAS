@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS configuracion_diaria (
     seccion_id TEXT REFERENCES secciones(id) ON DELETE CASCADE,
     fecha TEXT NOT NULL,
     periodo INTEGER NOT NULL DEFAULT 1 CHECK (periodo IN (1, 2)),
-    lecciones_totales INTEGER NOT NULL DEFAULT 4 CHECK (lecciones_totales BETWEEN 1 AND 4),
+    lecciones_totales INTEGER NOT NULL DEFAULT 4 CHECK (lecciones_totales BETWEEN 0 AND 4),
     observaciones TEXT,
     observacion_clase TEXT,
     UNIQUE(seccion_id, fecha, periodo)
@@ -192,3 +192,28 @@ INSERT OR IGNORE INTO secciones (id, nombre, nivel) VALUES
 
 INSERT OR IGNORE INTO docentes (id, nombre, email, password) VALUES
 ('docente-1', 'Profesor Principal', 'docente@ejemplo.com', 'admin123');
+
+-- Tablas para Notas Directas (Override)
+CREATE TABLE IF NOT EXISTS notas_directas_examen (
+    id TEXT PRIMARY KEY,
+    examen_id INTEGER REFERENCES examenes(id) ON DELETE CASCADE,
+    estudiante_id TEXT REFERENCES estudiantes(cedula) ON DELETE CASCADE,
+    nota REAL CHECK (nota >= 0 AND nota <= 100),
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS notas_directas_cotidiano (
+    id TEXT PRIMARY KEY,
+    trabajo_id INTEGER REFERENCES trabajos_cotidianos(id) ON DELETE CASCADE,
+    estudiante_id TEXT REFERENCES estudiantes(cedula) ON DELETE CASCADE,
+    nota REAL CHECK (nota >= 0 AND nota <= 100),
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS notas_directas_tarea (
+    id TEXT PRIMARY KEY,
+    tarea_id INTEGER REFERENCES tareas(id) ON DELETE CASCADE,
+    estudiante_id TEXT REFERENCES estudiantes(cedula) ON DELETE CASCADE,
+    nota REAL CHECK (nota >= 0 AND nota <= 100),
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
