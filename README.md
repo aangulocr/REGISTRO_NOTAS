@@ -27,21 +27,17 @@ Este proyecto es una aplicación web profesional diseñada para automatizar la g
     npm install
     ```
 
-3.  **Configurar Variables de Entorno**:
-    *   Cree un archivo llamado `.env` en la raíz del proyecto.
-    *   Copie el contenido de `.env.example` al archivo `.env`.
-    *   Reemplace los valores con sus credenciales de Supabase:
-        ```env
-        VITE_SUPABASE_URL=su_url_de_supabase
-        VITE_SUPABASE_ANON_KEY=su_llave_anon_de_supabase
-        ```
-
-4.  **Ejecutar en Modo Desarrollo**:
-    Para iniciar la aplicación localmente, ejecute:
+3.  **Ejecutar la Aplicación (Modo Escritorio Offline)**:
+    La aplicación ahora funciona de manera 100% offline utilizando una base de datos local (SQLite3). No requiere conexión a internet ni configuración de variables de entorno (Supabase fue removido).
+    
+    Para iniciar la aplicación en modo desarrollo, ejecute:
     ```bash
-    npm run dev
+    npm run web
     ```
-    La aplicación estará disponible usualmente en `http://localhost:5173`.
+    O si prefiere iniciar la versión de escritorio de Electron directamente:
+    ```bash
+    npm run start
+    ```
 
 5.  **Construir para Producción** (Opcional):
     Si desea generar los archivos para desplegar en un servidor real:
@@ -51,4 +47,4 @@ Este proyecto es una aplicación web profesional diseñada para automatizar la g
     Esto creará una carpeta `dist` lista para ser servida.
 
 ## Notas Importantes
-*   Asegúrese de que la base de datos de Supabase tenga las tablas necesarias ejecutando el script `supabase_schema.sql` en el SQL Editor de Supabase si es una base de datos nueva.
+* Esta es la versión de escritorio de Registro de Notas MEP 2026. Todos los datos se guardan en su computadora mediante SQLite. Para respaldos o restauración, puede utilizar la herramienta interna en la carpeta `DB_UPDATED`.
