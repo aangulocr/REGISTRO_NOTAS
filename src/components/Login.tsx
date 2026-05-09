@@ -18,10 +18,11 @@ export function Login({ onLogin }: LoginProps) {
     useEffect(() => {
         const checkExistingAccount = async () => {
             try {
-                const { data, error } = await sqliteService.query('SELECT COUNT(*) as count FROM docentes');
-                if (!error && data && data.length > 0 && data[0].count > 0) {
+                const { data, error } = await sqliteService.query('SELECT email FROM docentes LIMIT 1');
+                if (!error && data && data.length > 0) {
                     setAccountExists(true);
                     setIsRegistering(false); // Forzar siempre el modo "Login" si ya hay cuenta
+                    setEmail(data[0].email); // Pre-rellenar automáticamente el correo único
                 } else {
                     setAccountExists(false);
                     setIsRegistering(true); // Forzar siempre el modo "Registro" si no hay cuenta
