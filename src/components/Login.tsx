@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { sqliteService } from '../lib/sqliteService';
 
 interface LoginProps {
@@ -13,6 +13,25 @@ export function Login({ onLogin }: LoginProps) {
     const [showPassword, setShowPassword] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [accountExists, setAccountExists] = useState(false);
+
+    useEffect(() => {
+        const checkExistingAccount = async () => {
+            try {
+                const { data, error } = await sqliteService.query('SELECT COUNT(*) as count FROM docentes');
+                if (!error && data && data.length > 0 && data[0].count > 0) {
+                    setAccountExists(true);
+                    setIsRegistering(false); // Forzar siempre el modo "Login" si ya hay cuenta
+                } else {
+                    setAccountExists(false);
+                    setIsRegistering(true); // Forzar siempre el modo "Registro" si no hay cuenta
+                }
+            } catch (err) {
+                console.error("Error comprobando cuentas:", err);
+            }
+        };
+        checkExistingAccount();
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -23,6 +42,12 @@ export function Login({ onLogin }: LoginProps) {
         setIsLoading(true);
         try {
             if (isRegistering) {
+                if (accountExists) {
+                    setErrorMsg('Por seguridad, solo se permite un docente por instalación.');
+                    setIsLoading(false);
+                    return;
+                }
+                
                 // Registrar nuevo docente
                 const newId = `docente-${Date.now()}`;
                 const { error } = await sqliteService.from('docentes').insert({
@@ -66,6 +91,7 @@ export function Login({ onLogin }: LoginProps) {
 
     const toggleMode = (e: React.MouseEvent) => {
         e.preventDefault();
+        if (accountExists) return; // Bloquear toggle si ya existe cuenta
         setIsRegistering(!isRegistering);
         setErrorMsg('');
         setEmail('');
@@ -134,7 +160,7 @@ export function Login({ onLogin }: LoginProps) {
                     textAlign: 'center',
                     fontWeight: '700'
                 }}>
-                    {isRegistering ? 'Crear Cuenta' : 'Bienvenido'}
+                    {isRegistering ? 'Bienvenido a la App' : 'Inicio de Sesión'}
                 </h1>
                 
                 <p style={{
@@ -143,7 +169,7 @@ export function Login({ onLogin }: LoginProps) {
                     marginBottom: '2.5rem',
                     textAlign: 'center'
                 }}>
-                    {isRegistering ? 'Registra tus credenciales de docente' : 'Ingresa tus credenciales para continuar'}
+                    {isRegistering ? 'Por favor, registre la cuenta administradora (Usuario Único)' : 'Ingresa tus credenciales para continuar'}
                 </p>
 
                 <form onSubmit={handleSubmit} style={{ width: '100%' }}>
@@ -330,7 +356,7 @@ export function Login({ onLogin }: LoginProps) {
                             cursor: isLoading ? 'not-allowed' : 'pointer'
                         }}
                     >
-                        {isLoading ? (isRegistering ? 'Registrando...' : 'Verificando...') : (isRegistering ? 'Registrarse' : 'Ingresar')}
+                        {isLoading ? (isRegistering ? 'Registrando...' : 'Verificando...') : (isRegistering ? 'Registrar Cuenta' : 'Ingresar')}
                     </button>
                 </form>
 
@@ -346,14 +372,18 @@ export function Login({ onLogin }: LoginProps) {
                             ¿Olvidaste tu contraseña?
                         </a>
                     )}
-                    <a href="#" onClick={toggleMode} style={{
-                        color: '#a78bfa',
-                        fontSize: '0.9rem',
-                        fontWeight: '500',
-                        textDecoration: 'none'
-                    }}>
-                        {isRegistering ? '¿Ya tienes cuenta? Ingresa aquí' : 'Crea tu cuenta de docente aquí'}
-                    </a>
+                    
+                    {/* Solo mostramos el enlace de crear cuenta si NO existe ninguna en la base de datos */}
+                    {!accountExists && (
+                        <a href="#" onClick={toggleMode} style={{
+                            color: '#a78bfa',
+                            fontSize: '0.9rem',
+                            fontWeight: '500',
+                            textDecoration: 'none'
+                        }}>
+                            {isRegistering ? '¿Ya tienes cuenta? Ingresa aquí' : 'Crea tu cuenta administradora aquí'}
+                        </a>
+                    )}
                 </div>
             </div>
         </div>
