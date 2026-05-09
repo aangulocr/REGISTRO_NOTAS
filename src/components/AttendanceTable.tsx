@@ -238,8 +238,8 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
                     OBSERVACIÓN (Clase o Grupo):
                 </label>
                 <textarea
-                    value={observacionClase}
-                    onChange={(e) => setObservacionClase(e.target.value)}
+                    value={observaciones}
+                    onChange={(e) => setObservaciones(e.target.value)}
                     placeholder="Escriba aquí cualquier observación relevante sobre la sección o la lección de hoy..."
                     style={{
                         width: '100%',
