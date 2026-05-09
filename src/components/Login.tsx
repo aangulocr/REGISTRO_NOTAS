@@ -201,7 +201,7 @@ export function Login({ onLogin }: LoginProps) {
                     )}
 
                     <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={{
+                        <label htmlFor="email" style={{
                             display: 'block',
                             fontSize: '0.75rem',
                             fontWeight: '600',
@@ -212,7 +212,10 @@ export function Login({ onLogin }: LoginProps) {
                             CORREO ELECTRÓNICO
                         </label>
                         <input
+                            id="email"
+                            name="email"
                             type="email"
+                            autoComplete="username"
                             placeholder="docente@ejemplo.com"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
@@ -236,7 +239,7 @@ export function Login({ onLogin }: LoginProps) {
                     </div>
 
                     <div style={{ marginBottom: '2rem' }}>
-                        <label style={{
+                        <label htmlFor="password" style={{
                             display: 'block',
                             fontSize: '0.75rem',
                             fontWeight: '600',
@@ -248,7 +251,10 @@ export function Login({ onLogin }: LoginProps) {
                         </label>
                         <div style={{ position: 'relative', width: '100%' }}>
                             <input
+                                id="password"
+                                name="password"
                                 type={showPassword ? 'text' : 'password'}
+                                autoComplete={isRegistering ? "new-password" : "current-password"}
                                 placeholder="........"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
