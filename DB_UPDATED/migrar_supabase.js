@@ -132,6 +132,15 @@ async function run() {
                         }
 
                         // SQLite3 solo acepta string, number, bigint, buffer, o null
+                        if (val instanceof Date) {
+                            if (col === 'fecha') {
+                                const y = val.getFullYear();
+                                const m = String(val.getMonth() + 1).padStart(2, '0');
+                                const d = String(val.getDate()).padStart(2, '0');
+                                return `${y}-${m}-${d}`;
+                            }
+                            return val.toISOString();
+                        }
                         if (typeof val === 'boolean') return val ? 1 : 0;
                         if (val !== null && typeof val === 'object') return JSON.stringify(val);
                         return val;
