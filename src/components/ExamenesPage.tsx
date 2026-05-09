@@ -311,17 +311,17 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
                                     <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--glass-border)' }}>
-                                        <th style={{ textAlign: 'left', padding: '1rem 1.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>Estudiante</th>
-                                        <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>MIN/MAX</th>
+                                        <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)', position: 'sticky', left: 0, zIndex: 10, background: '#111827', minWidth: '200px' }}>Estudiante</th>
+                                        <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}>M/M</th>
                                         {indicadores.map((ind, idx) => (
-                                            <th key={ind.id} style={{ textAlign: 'center', padding: '1rem', fontSize: '0.7rem', maxWidth: '120px' }} title={ind.titulo}>
+                                            <th key={ind.id} style={{ textAlign: 'center', padding: '0.5rem 0.2rem', fontSize: '0.7rem', width: '45px', minWidth: '45px', maxWidth: '45px' }} title={ind.titulo}>
                                                 I{idx + 1}
-                                                <div style={{ fontSize: '0.6rem', fontWeight: 400, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ind.titulo}</div>
+                                                <div style={{ fontSize: '0.55rem', fontWeight: 400, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '40px' }}>{ind.titulo}</div>
                                             </th>
                                         ))}
-                                        <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.75rem', color: '#facc15', fontWeight: 700 }}>NOTA<br/>FINAL</th>
-                                        <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 700 }}>NOTA</th>
-                                        <th style={{ textAlign: 'center', padding: '1rem', fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 700 }}>VALOR</th>
+                                        <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.7rem', color: '#facc15', fontWeight: 700 }}>DIR.</th>
+                                        <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>NOTA</th>
+                                        <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>%</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -333,14 +333,14 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
                                         const tieneNotaDirecta = notaDirecta !== '';
                                         return (
                                             <tr key={est.cedula} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: tieneNotaDirecta ? 'rgba(250,204,21,0.03)' : 'transparent' }}>
-                                                <td style={{ padding: '1rem 1.5rem', fontSize: '0.9rem' }}>{est.apellidos}, {est.nombre}</td>
-                                                <td style={{ textAlign: 'center' }}>
-                                                    <button onClick={() => handleToggleAllScores(est.cedula)} style={{ fontSize: '9px', padding: '4px 8px', borderRadius: '8px', background: allAreThree ? 'var(--danger)' : 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>{allAreThree ? 'MIN' : 'MAX'}</button>
+                                                <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', position: 'sticky', left: 0, zIndex: 5, background: tieneNotaDirecta ? '#1a180e' : '#111827', whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,0.05)' }}>{est.apellidos}, {est.nombre}</td>
+                                                <td style={{ textAlign: 'center', padding: '0.25rem' }}>
+                                                    <button onClick={() => handleToggleAllScores(est.cedula)} style={{ fontSize: '8px', padding: '4px 6px', borderRadius: '6px', background: allAreThree ? 'var(--danger)' : 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>{allAreThree ? 'MIN' : 'MAX'}</button>
                                                 </td>
                                                 {indicadores.map(ind => {
                                                     const score = evaluaciones[est.cedula]?.[String(ind.id)] ?? 0;
                                                     return (
-                                                        <td key={ind.id} style={{ textAlign: 'center', padding: '0.5rem' }}>
+                                                        <td key={ind.id} style={{ textAlign: 'center', padding: '0.25rem' }}>
                                                             <input
                                                                 type="number"
                                                                 min={0}
@@ -349,22 +349,22 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
                                                                 onChange={e => handleScoreChange(est.cedula, ind.id, e.target.value)}
                                                                 title={`${ind.titulo} (0-3)`}
                                                                 style={{
-                                                                    width: '48px',
+                                                                    width: '38px',
                                                                     textAlign: 'center',
                                                                     background: 'rgba(255,255,255,0.07)',
                                                                     border: '1px solid rgba(99,102,241,0.3)',
                                                                     borderRadius: '6px',
                                                                     color: 'white',
-                                                                    fontSize: '0.9rem',
+                                                                    fontSize: '0.85rem',
                                                                     fontWeight: 700,
-                                                                    padding: '4px 2px',
+                                                                    padding: '4px 0',
                                                                     outline: 'none'
                                                                 }}
                                                             />
                                                         </td>
                                                     );
                                                 })}
-                                                <td style={{ textAlign: 'center', padding: '0.5rem' }}>
+                                                <td style={{ textAlign: 'center', padding: '0.25rem' }}>
                                                     <input
                                                         type="number"
                                                         min={0}
@@ -374,21 +374,21 @@ export const ExamenesPage: React.FC<Props> = ({ periodo }) => {
                                                         onChange={e => handleNotaFinalDirecta(est.cedula, e.target.value)}
                                                         title="Nota Final Directa (sobreescribe indicadores)"
                                                         style={{
-                                                            width: '58px',
+                                                            width: '46px',
                                                             textAlign: 'center',
                                                             background: tieneNotaDirecta ? 'rgba(250,204,21,0.15)' : 'rgba(255,255,255,0.05)',
                                                             border: `1px solid ${tieneNotaDirecta ? '#facc15' : 'rgba(255,255,255,0.1)'}`,
                                                             borderRadius: '6px',
                                                             color: tieneNotaDirecta ? '#facc15' : 'var(--text-muted)',
-                                                            fontSize: '0.9rem',
+                                                            fontSize: '0.85rem',
                                                             fontWeight: 700,
-                                                            padding: '4px 2px',
+                                                            padding: '4px 0',
                                                             outline: 'none'
                                                         }}
                                                     />
                                                 </td>
-                                                <td style={{ textAlign: 'center', fontWeight: 700, color: nota >= 70 ? 'var(--primary)' : 'var(--danger)' }}>{nota}%</td>
-                                                <td style={{ textAlign: 'center', fontWeight: 700, color: nota >= 70 ? 'var(--primary)' : 'var(--danger)' }}>{obtenido}%</td>
+                                                <td style={{ textAlign: 'center', fontWeight: 700, color: nota >= 70 ? 'var(--primary)' : 'var(--danger)', fontSize: '0.85rem' }}>{nota}%</td>
+                                                <td style={{ textAlign: 'center', fontWeight: 700, color: nota >= 70 ? 'var(--primary)' : 'var(--danger)', fontSize: '0.85rem' }}>{obtenido}%</td>
                                             </tr>
                                         );
                                     })}
