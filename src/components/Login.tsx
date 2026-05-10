@@ -251,28 +251,29 @@ export function Login({ onLogin }: LoginProps) {
                             }}>
                                 NOMBRE COMPLETO
                             </label>
-                            <input
-                                type="text"
-                                placeholder="Ej: Juan Pérez"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                required
-                                disabled={isLoading}
-                                style={{
-                                    width: '100%',
-                                    padding: '0.875rem 1rem',
-                                    background: 'rgba(255, 255, 255, 0.03)',
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    borderRadius: '12px',
-                                    color: 'white',
-                                    fontSize: '0.95rem',
-                                    outline: 'none',
-                                    transition: 'border-color 0.2s',
-                                    opacity: isLoading ? 0.7 : 1
-                                }}
-                                onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
-                                onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'}
-                            />
+                                <input
+                                    type="text"
+                                    placeholder="Ej: Juan Pérez"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    required
+                                    disabled={isLoading}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.875rem 1rem',
+                                        background: 'rgba(255, 255, 255, 0.03)',
+                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                        borderRadius: '12px',
+                                        color: 'white',
+                                        fontSize: '0.95rem',
+                                        outline: 'none',
+                                        transition: 'all 0.2s',
+                                        opacity: isLoading ? 0.7 : 1,
+                                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)'
+                                    }}
+                                    onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
+                                    onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'}
+                                />
                         </div>
                     )}
 
@@ -287,31 +288,66 @@ export function Login({ onLogin }: LoginProps) {
                         }}>
                             CORREO ELECTRÓNICO
                         </label>
-                        <input
-                            id="email"
-                            name="email"
-                            type="email"
-                            autoComplete="username"
-                            placeholder="docente@ejemplo.com"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                            disabled={isLoading}
-                            style={{
-                                width: '100%',
-                                padding: '0.875rem 1rem',
-                                background: 'rgba(255, 255, 255, 0.03)',
-                                border: '1px solid rgba(255, 255, 255, 0.1)',
-                                borderRadius: '12px',
-                                color: 'white',
-                                fontSize: '0.95rem',
-                                outline: 'none',
-                                transition: 'border-color 0.2s',
-                                opacity: isLoading ? 0.7 : 1
-                            }}
-                            onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
-                            onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'}
-                        />
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                id="email"
+                                name="email"
+                                type="email"
+                                autoComplete="username"
+                                placeholder="docente@ejemplo.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                                disabled={isLoading}
+                                readOnly={accountExists}
+                                style={{
+                                    width: '100%',
+                                    padding: '0.875rem 1rem 0.875rem 2.75rem',
+                                    background: accountExists ? 'rgba(99, 102, 241, 0.05)' : 'rgba(255, 255, 255, 0.03)',
+                                    border: accountExists ? '1px solid rgba(99, 102, 241, 0.2)' : '1px solid rgba(255, 255, 255, 0.1)',
+                                    borderRadius: '12px',
+                                    color: accountExists ? '#a78bfa' : 'white',
+                                    fontSize: '0.95rem',
+                                    outline: 'none',
+                                    transition: 'all 0.2s',
+                                    opacity: isLoading ? 0.7 : 1,
+                                    cursor: accountExists ? 'default' : 'text'
+                                }}
+                                onFocus={(e) => !accountExists && (e.target.style.borderColor = 'var(--primary)')}
+                                onBlur={(e) => !accountExists && (e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)')}
+                            />
+                            <div style={{
+                                position: 'absolute',
+                                left: '1rem',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                color: accountExists ? '#a78bfa' : '#64748b',
+                                display: 'flex',
+                                alignItems: 'center'
+                            }}>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="12" cy="7" r="4"></circle>
+                                </svg>
+                            </div>
+                            {accountExists && (
+                                <div style={{
+                                    position: 'absolute',
+                                    right: '1rem',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    fontSize: '0.65rem',
+                                    color: '#818cf8',
+                                    fontWeight: '700',
+                                    background: 'rgba(99, 102, 241, 0.1)',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    textTransform: 'uppercase'
+                                }}>
+                                    Detectado
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div style={{ marginBottom: '2rem' }}>
@@ -390,46 +426,69 @@ export function Login({ onLogin }: LoginProps) {
                         </div>
                         
                         {!isRegistering && accountExists && (
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
+                            <div style={{ 
+                                display: 'flex', 
+                                justifyContent: 'center', 
+                                marginTop: '1.25rem',
+                                padding: '1rem',
+                                background: 'rgba(167, 139, 250, 0.05)',
+                                borderRadius: '16px',
+                                border: '1px dashed rgba(167, 139, 250, 0.2)'
+                            }}>
                                 <button
                                     type="button"
                                     onClick={handleWindowsHello}
                                     disabled={isLoading}
                                     style={{
-                                        background: 'rgba(255, 255, 255, 0.03)',
-                                        border: '1px solid rgba(255, 255, 255, 0.08)',
-                                        borderRadius: '20px',
-                                        padding: '0.35rem 0.8rem',
+                                        background: 'none',
+                                        border: 'none',
                                         color: '#a78bfa',
-                                        fontSize: '0.75rem',
-                                        fontWeight: '500',
+                                        fontSize: '0.85rem',
+                                        fontWeight: '600',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        gap: '0.4rem',
+                                        gap: '0.6rem',
                                         cursor: isLoading ? 'not-allowed' : 'pointer',
                                         transition: 'all 0.2s ease',
-                                        opacity: isLoading ? 0.6 : 1
+                                        opacity: isLoading ? 0.6 : 1,
+                                        padding: '0.5rem 1rem',
+                                        borderRadius: '12px'
                                     }}
                                     onMouseOver={(e) => {
                                         if (!isLoading) {
-                                            e.currentTarget.style.background = 'rgba(167, 139, 250, 0.08)';
-                                            e.currentTarget.style.borderColor = 'rgba(167, 139, 250, 0.3)';
+                                            e.currentTarget.style.background = 'rgba(167, 139, 250, 0.1)';
+                                            e.currentTarget.style.transform = 'translateY(-1px)';
                                         }
                                     }}
                                     onMouseOut={(e) => {
                                         if (!isLoading) {
-                                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                                            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                                            e.currentTarget.style.background = 'none';
+                                            e.currentTarget.style.transform = 'translateY(0)';
                                         }
                                     }}
                                 >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                                    </svg>
-                                    {localStorage.getItem('windows_hello_registered') === 'true' 
-                                        ? 'Entrar con PIN de Windows' 
-                                        : 'Vincular PIN de Windows'}
+                                    <div style={{
+                                        width: '32px',
+                                        height: '32px',
+                                        borderRadius: '8px',
+                                        background: 'rgba(167, 139, 250, 0.1)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M12 2a5 5 0 0 0-5 5v4"></path>
+                                            <path d="M4 19a8 8 0 0 1 16 0"></path>
+                                            <circle cx="12" cy="14" r="2"></circle>
+                                            <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                                        </svg>
+                                    </div>
+                                    <div style={{ textAlign: 'left' }}>
+                                        <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '400' }}>Acceso Rápido</div>
+                                        {localStorage.getItem('windows_hello_registered') === 'true' 
+                                            ? 'Usar PIN de Windows' 
+                                            : 'Vincular Windows Hello'}
+                                    </div>
                                 </button>
                             </div>
                         )}
