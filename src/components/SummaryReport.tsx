@@ -79,12 +79,16 @@ export function SummaryReport({ seccionId, periodo, onClose }: Props) {
                 const datesWithAbsence: string[] = [];
 
                 studentAttendance.forEach((record: any) => {
-                    const lessonsToday = configMap[record.fecha] || 4;
-                    let peso = record.peso_ausencia || 0;
-                    if (peso > 0) {
-                        peso = (peso / 4) * lessonsToday;
-                        studentAbsenceWeight += peso;
-                        datesWithAbsence.push(`${record.fecha} (${record.estado_nombre})`);
+                    if (!record.es_justificada) {
+                        const lessonsToday = configMap[record.fecha] || 4;
+                        let peso = record.peso_ausencia || 0;
+                        if (peso > 0) {
+                            if (lessonsToday < 4) {
+                                peso = (peso / 4) * lessonsToday;
+                            }
+                            studentAbsenceWeight += peso;
+                            datesWithAbsence.push(`${record.fecha} (${record.estado_nombre})`);
+                        }
                     }
                 });
 

@@ -47,26 +47,37 @@ export function Dashboard({ seccionId, periodo }: Props) {
         });
 
         // Calculate unique dates with records to get "Total Programmed Lessons"
-        const typedAttendance = attendanceData as Database['public']['Tables']['control_asistencia']['Row'][] | null;
+        const typedAttendance = attendanceData as any[] | null;
         const uniqueDates = Array.from(new Set(typedAttendance?.map(a => a.fecha) || []));
         let leccionesProgramadas = 0;
         uniqueDates.forEach(date => {
             leccionesProgramadas += configMap[date] || 4;
         });
 
-        let sumAbsenceWeights = 0;
+        // Calculate absenteeism weight per student
+        const studentWeights: Record<string, number> = {};
         typedAttendance?.forEach((r: any) => {
+            if (!studentWeights[r.estudiante_id]) studentWeights[r.estudiante_id] = 0;
+            
             const lessonsToday = configMap[r.fecha] || 4;
-            let peso = r.estados_asistencia?.peso_ausencia || 0;
+            let peso = r.peso_ausencia || 0;
             if (peso > 0) {
                 // Scale weight proportionally to today's lessons
-                peso = (peso / 4) * lessonsToday;
-                sumAbsenceWeights += peso;
+                if (lessonsToday < 4) {
+                    peso = (peso / 4) * lessonsToday;
+                }
+                studentWeights[r.estudiante_id] += peso;
             }
         });
 
-        const ausenciasPromedio = sumAbsenceWeights / totalStudents;
-        const porcentaje = leccionesProgramadas > 0 ? (ausenciasPromedio / leccionesProgramadas) * 100 : 0;
+        // Sum the floored weight of each student (as per rule: Math.floor(totalWeight))
+        let totalFlooredAbsences = 0;
+        Object.values(studentWeights).forEach(weight => {
+            totalFlooredAbsences += Math.floor(weight);
+        });
+
+        const ausenciasPromedio = totalFlooredAbsences / totalStudents;
+        const porcentaje = leccionesProgramadas > 0 ? (totalFlooredAbsences / (leccionesProgramadas * totalStudents)) * 100 : 0;
 
         setStats({
             leccionesProgramadas,

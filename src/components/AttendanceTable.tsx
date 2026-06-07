@@ -167,12 +167,14 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
             ];
 
             estudiantes.forEach(est => {
+                const stateId = mapLessonsToState(asistencias[est.cedula]);
+                const compositeId = `att-${est.cedula}-${fecha}-${periodo}`;
                 queries.push({
-                    sql: `INSERT INTO control_asistencia (estudiante_id, seccion_id, fecha, periodo, estado_id) 
-                          VALUES (?, ?, ?, ?, ?)
+                    sql: `INSERT INTO control_asistencia (id, estudiante_id, seccion_id, fecha, periodo, estado_id) 
+                          VALUES (?, ?, ?, ?, ?, ?)
                           ON CONFLICT(estudiante_id, fecha, periodo) DO UPDATE SET 
                           estado_id = excluded.estado_id`,
-                    params: [est.cedula, seccionId, fecha, periodo, mapLessonsToState(asistencias[est.cedula])]
+                    params: [compositeId, est.cedula, seccionId, fecha, periodo, stateId]
                 });
             });
 
@@ -403,6 +405,11 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
                     </div>
                 </footer>
             </div>
+        </div>
+    );
+}
+
+v>
         </div>
     );
 }

@@ -83,32 +83,42 @@ export const FinalReportPage: React.FC<Props> = ({ periodo }) => {
                 [seccionId, ...periodsToFetch]
             );
 
-            // 3. Indicadores y evaluaciones de cotidiano
+            // IDs para consultas
             const tcIds: number[] = (tcData || []).map((t: any) => t.id);
-            const { data: tcIndData } = tcIds.length > 0
+            const tarIds: number[] = (tarData || []).map((t: any) => t.id);
+            const exIds: number[] = (exData || []).map((e: any) => e.id);
+
+            // 3. Notas Directas
+            const { data: directTCData } = await sqliteService.from('notas_directas_cotidiano').selectIn('*', 'trabajo_id', tcIds);
+            const { data: directTarData } = await sqliteService.from('notas_directas_tarea').selectIn('*', 'tarea_id', tarIds);
+            const { data: directExData } = await sqliteService.from('notas_directas_examen').selectIn('*', 'examen_id', exIds);
+
+            // 4. Indicadores y evaluaciones de cotidiano
+            const tcIndDataResult = tcIds.length > 0
                 ? await sqliteService.from('indicadores').selectIn('id, trabajo_id', 'trabajo_id', tcIds)
                 : { data: [] };
-            const tcIndIds: number[] = (tcIndData || []).map((i: any) => i.id);
+            const tcIndData = tcIndDataResult.data || [];
+            const tcIndIds: number[] = tcIndData.map((i: any) => i.id);
             const { data: tcEvalData } = tcIndIds.length > 0
                 ? await sqliteService.from('evaluaciones_cotidiano').selectIn('*', 'indicador_id', tcIndIds)
                 : { data: [] };
 
-            // 4. Indicadores y evaluaciones de tareas
-            const tarIds: number[] = (tarData || []).map((t: any) => t.id);
-            const { data: tarIndData } = tarIds.length > 0
+            // 5. Indicadores y evaluaciones de tareas
+            const tarIndDataResult = tarIds.length > 0
                 ? await sqliteService.from('indicadores_tarea').selectIn('id, tarea_id', 'tarea_id', tarIds)
                 : { data: [] };
-            const tarIndIds: number[] = (tarIndData || []).map((i: any) => i.id);
+            const tarIndData = tarIndDataResult.data || [];
+            const tarIndIds: number[] = tarIndData.map((i: any) => i.id);
             const { data: tarEvalData } = tarIndIds.length > 0
                 ? await sqliteService.from('evaluaciones_tarea').selectIn('*', 'indicador_id', tarIndIds)
                 : { data: [] };
 
-            // 5. Indicadores y evaluaciones de exámenes
-            const exIds: number[] = (exData || []).map((e: any) => e.id);
-            const { data: exIndData } = exIds.length > 0
+            // 6. Indicadores y evaluaciones de exámenes
+            const exIndDataResult = exIds.length > 0
                 ? await sqliteService.from('indicadores_examen').selectIn('id, examen_id', 'examen_id', exIds)
                 : { data: [] };
-            const exIndIds: number[] = (exIndData || []).map((i: any) => i.id);
+            const exIndData = exIndDataResult.data || [];
+            const exIndIds: number[] = exIndData.map((i: any) => i.id);
             const { data: exEvalData } = exIndIds.length > 0
                 ? await sqliteService.from('evaluaciones_examen').selectIn('*', 'indicador_id', exIndIds)
                 : { data: [] };
@@ -119,47 +129,77 @@ export const FinalReportPage: React.FC<Props> = ({ periodo }) => {
                 configMap[`${c.fecha}-${c.periodo}`] = c.lecciones_totales;
             });
 
-            // 6. Calcular consolidado por estudiante
+            // 7. Calcular consolidado por estudiante
             const getGradesForPeriod = (est: Estudiante, p: number) => {
                 // Cotidiano (35%)
-                const currentTCIds = (tcData || []).filter((t: any) => t.periodo === p).map((t: any) => t.id);
+                const currentTCs = (tcData || []).filter((t: any) => t.periodo === p);
                 let tcAverage = 0;
-                if (currentTCIds.length > 0) {
+                if (currentTCs.length > 0) {
                     let sumOfPercentages = 0;
-                    currentTCIds.forEach((tcId: number) => {
-                        const tcInds = (tcIndData || []).filter((i: any) => i.trabajo_id === tcId).map((i: any) => i.id);
-                        if (tcInds.length > 0) {
-                            const studentEvals = (tcEvalData || []).filter((ev: any) =>
-                                ev.estudiante_id === est.cedula && tcInds.includes(ev.indicador_id)
-                            );
-                            const points = studentEvals.reduce((acc: number, curr: any) => acc + (curr.puntaje || 0), 0);
-                            sumOfPercentages += (points / (tcInds.length * 3)) * 100;
+                    currentTCs.forEach((tc: any) => {
+                        // Revisar si hay nota directa
+                        const directGrade = (directTCData || []).find((nd: any) => 
+                            String(nd.trabajo_id) === String(tc.id) && 
+                            String(nd.estudiante_id) === String(est.cedula)
+                        );
+                        
+                        if (directGrade) {
+                            sumOfPercentages += Number(directGrade.nota);
+                        } else {
+                            const tcInds = (tcIndData || []).filter((i: any) => String(i.trabajo_id) === String(tc.id)).map((i: any) => String(i.id));
+                            if (tcInds.length > 0) {
+                                const studentEvals = (tcEvalData || []).filter((ev: any) =>
+                                    String(ev.estudiante_id) === String(est.cedula) && tcInds.includes(String(ev.indicador_id))
+                                );
+                                const points = studentEvals.reduce((acc: number, curr: any) => acc + (curr.puntaje || 0), 0);
+                                sumOfPercentages += (points / (tcInds.length * 3)) * 100;
+                            }
                         }
                     });
-                    tcAverage = (sumOfPercentages / currentTCIds.length) || 0;
+                    tcAverage = (sumOfPercentages / currentTCs.length) || 0;
                 }
                 const tcObtained = (tcAverage / 100) * 35;
 
                 // Tareas (variable %)
                 let tarObtained = 0;
                 (tarData || []).filter((t: any) => t.periodo === p).forEach((tar: any) => {
-                    const inds = (tarIndData || []).filter((i: any) => i.tarea_id === tar.id).map((i: any) => i.id);
-                    const evals = (tarEvalData || []).filter((ev: any) =>
-                        ev.estudiante_id === est.cedula && inds.includes(ev.indicador_id)
+                    // Revisar si hay nota directa
+                    const directGrade = (directTarData || []).find((nd: any) => 
+                        String(nd.tarea_id) === String(tar.id) && 
+                        String(nd.estudiante_id) === String(est.cedula)
                     );
-                    const points = evals.reduce((acc: number, curr: any) => acc + (curr.puntaje || 0), 0);
-                    tarObtained += (points / tar.puntos_totales) * tar.porcentaje;
+                    
+                    if (directGrade) {
+                        tarObtained += (Number(directGrade.nota) / 100) * tar.porcentaje;
+                    } else {
+                        const inds = (tarIndData || []).filter((i: any) => String(i.tarea_id) === String(tar.id)).map((i: any) => String(i.id));
+                        const evals = (tarEvalData || []).filter((ev: any) =>
+                            String(ev.estudiante_id) === String(est.cedula) && inds.includes(String(ev.indicador_id))
+                        );
+                        const points = evals.reduce((acc: number, curr: any) => acc + (curr.puntaje || 0), 0);
+                        tarObtained += (points / tar.puntos_totales) * tar.porcentaje;
+                    }
                 });
 
                 // Exámenes (variable %)
                 let exObtained = 0;
                 (exData || []).filter((e: any) => e.periodo === p).forEach((ex: any) => {
-                    const inds = (exIndData || []).filter((i: any) => i.examen_id === ex.id).map((i: any) => i.id);
-                    const evals = (exEvalData || []).filter((ev: any) =>
-                        ev.estudiante_id === est.cedula && inds.includes(ev.indicador_id)
+                    // Revisar si hay nota directa
+                    const directGrade = (directExData || []).find((nd: any) => 
+                        String(nd.examen_id) === String(ex.id) && 
+                        String(nd.estudiante_id) === String(est.cedula)
                     );
-                    const points = evals.reduce((acc: number, curr: any) => acc + (curr.puntaje || 0), 0);
-                    exObtained += (points / ex.puntos_totales) * ex.porcentaje;
+                    
+                    if (directGrade) {
+                        exObtained += (Number(directGrade.nota) / 100) * ex.porcentaje;
+                    } else {
+                        const inds = (exIndData || []).filter((i: any) => String(i.examen_id) === String(ex.id)).map((i: any) => String(i.id));
+                        const evals = (exEvalData || []).filter((ev: any) =>
+                            String(ev.estudiante_id) === String(est.cedula) && inds.includes(String(ev.indicador_id))
+                        );
+                        const points = evals.reduce((acc: number, curr: any) => acc + (curr.puntaje || 0), 0);
+                        exObtained += (points / ex.puntos_totales) * ex.porcentaje;
+                    }
                 });
 
                 // Asistencia (5%)

@@ -13,6 +13,7 @@ export const CotidianoSummary: React.FC<CotidianoSummaryProps> = ({ seccionId, p
     const [trabajos, setTrabajos] = useState<any[]>([]);
     const [indicadores, setIndicadores] = useState<any[]>([]);
     const [evaluaciones, setEvaluaciones] = useState<any[]>([]);
+    const [notasDirectas, setNotasDirectas] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => { fetchData(); }, [seccionId, periodo]);
@@ -54,6 +55,10 @@ export const CotidianoSummary: React.FC<CotidianoSummaryProps> = ({ seccionId, p
                     const { data: evalData } = await sqliteService.from('evaluaciones_cotidiano').selectIn('*', 'indicador_id', indIds);
                     setEvaluaciones(evalData || []);
                 }
+
+                // 6. Notas directas
+                const { data: directData } = await sqliteService.from('notas_directas_cotidiano').selectIn('*', 'trabajo_id', tcIds);
+                setNotasDirectas(directData || []);
             }
         } catch (error) {
             console.error('Error fetching summary data:', error);
@@ -68,24 +73,34 @@ export const CotidianoSummary: React.FC<CotidianoSummaryProps> = ({ seccionId, p
         if (estudiantes.length > 0 && trabajos.length > 0) {
             calculateAllGrades();
         }
-    }, [estudiantes, trabajos, indicadores, evaluaciones]);
+    }, [estudiantes, trabajos, indicadores, evaluaciones, notasDirectas]);
 
     const calculateAllGrades = () => {
         const newGradesMap: Record<string, Record<number, number>> = {};
         estudiantes.forEach(est => {
             newGradesMap[est.cedula] = {};
             trabajos.forEach(tc => {
-                const tcIndicators = indicadores.filter(ind => ind.trabajo_id === tc.id);
-                if (tcIndicators.length > 0) {
-                    const tcIndIds = tcIndicators.map((i: any) => i.id);
-                    const studentEvals = evaluaciones.filter(ev =>
-                        ev.estudiante_id === est.cedula && tcIndIds.includes(ev.indicador_id)
-                    );
-                    const totalPoints = studentEvals.reduce((acc, curr) => acc + (curr.puntaje || 0), 0);
-                    const maxPoints = tcIndicators.length * 3;
-                    newGradesMap[est.cedula][tc.id] = Math.round((totalPoints / maxPoints) * 100) || 0;
+                // Primero revisar si hay nota directa
+                const directGrade = (notasDirectas || []).find(nd => 
+                    String(nd.trabajo_id) === String(tc.id) && 
+                    String(nd.estudiante_id) === String(est.cedula)
+                );
+                
+                if (directGrade) {
+                    newGradesMap[est.cedula][tc.id] = Number(directGrade.nota);
                 } else {
-                    newGradesMap[est.cedula][tc.id] = 0;
+                    const tcIndicators = indicadores.filter(ind => String(ind.trabajo_id) === String(tc.id));
+                    if (tcIndicators.length > 0) {
+                        const tcIndIds = tcIndicators.map((i: any) => String(i.id));
+                        const studentEvals = evaluaciones.filter(ev =>
+                            String(ev.estudiante_id) === String(est.cedula) && tcIndIds.includes(String(ev.indicador_id))
+                        );
+                        const totalPoints = studentEvals.reduce((acc, curr) => acc + (curr.puntaje || 0), 0);
+                        const maxPoints = tcIndicators.length * 3;
+                        newGradesMap[est.cedula][tc.id] = Math.round((totalPoints / maxPoints) * 100) || 0;
+                    } else {
+                        newGradesMap[est.cedula][tc.id] = 0;
+                    }
                 }
             });
         });
@@ -95,13 +110,13 @@ export const CotidianoSummary: React.FC<CotidianoSummaryProps> = ({ seccionId, p
     const handlePrint = () => { window.print(); };
 
     if (loading) return (
-        <div className="modal-overlay">
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
             <div className="glass-card" style={{ padding: '2rem', textAlign: 'center' }}>⌛ Cargando resumen...</div>
         </div>
     );
 
     return (
-        <div className="modal-overlay" style={{ background: 'rgba(0,0,0,0.8)', zIndex: 1000 }}>
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '2rem' }}>
             <div className="glass-card" style={{ width: '98%', maxWidth: '1400px', maxHeight: '95vh', overflowY: 'auto', padding: '2rem', position: 'relative' }}>
                 <button onClick={onClose} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }}>✕</button>
 

@@ -54,19 +54,34 @@ export const TareaSummary: React.FC<TareaSummaryProps> = ({ seccionId, periodo, 
                     : { data: [] };
                 const evaluations = evalData || [];
 
-                // 6. Calcular notas
+                // 6. Notas directas
+                const { data: directData } = await sqliteService.from('notas_directas_tarea').selectIn('*', 'tarea_id', tarIds);
+                const directGrades = directData || [];
+
+                // 7. Calcular notas
                 const newGradesMap: Record<string, Record<number, { nota: number; obtenido: number }>> = {};
                 students.forEach((est: any) => {
                     newGradesMap[est.cedula] = {};
                     tasks.forEach((tar: any) => {
-                        const tarInds = indicators.filter((i: any) => i.tarea_id === tar.id);
-                        const studentEvals = evaluations.filter((ev: any) =>
-                            ev.estudiante_id === est.cedula &&
-                            tarInds.some((i: any) => i.id === ev.indicador_id)
+                        // Primero revisar si hay nota directa
+                        const directGrade = (directGrades || []).find((nd: any) => 
+                            String(nd.tarea_id) === String(tar.id) && 
+                            String(nd.estudiante_id) === String(est.cedula)
                         );
-                        let pointsPaid = 0;
-                        studentEvals.forEach((ev: any) => { pointsPaid += ev.puntaje || 0; });
-                        const nota = Math.round((pointsPaid / tar.puntos_totales) * 100) || 0;
+                        
+                        let nota = 0;
+                        if (directGrade) {
+                            nota = Number(directGrade.nota);
+                        } else {
+                            const tarInds = indicators.filter((i: any) => String(i.tarea_id) === String(tar.id));
+                            const studentEvals = evaluations.filter((ev: any) =>
+                                String(ev.estudiante_id) === String(est.cedula) &&
+                                tarInds.some((i: any) => String(i.id) === String(ev.indicador_id))
+                            );
+                            let pointsPaid = 0;
+                            studentEvals.forEach((ev: any) => { pointsPaid += ev.puntaje || 0; });
+                            nota = Math.round((pointsPaid / tar.puntos_totales) * 100) || 0;
+                        }
                         const obtenido = Number(((nota / 100) * tar.porcentaje).toFixed(2));
                         newGradesMap[est.cedula][tar.id] = { nota, obtenido };
                     });
