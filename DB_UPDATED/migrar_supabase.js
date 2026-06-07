@@ -14,8 +14,23 @@ const { Client } = pkg;
 // ==========================================
 const SUPABASE_DB_URL = 'postgresql://postgres:rumenFila%2310@db.frkscfrpmtungywqgrvf.supabase.co:5432/postgres';
 
-const APPDATA = process.env.APPDATA || process.env.HOME;
-const SQLITE_DB_PATH = path.join(APPDATA, 'asistencia-mep', 'asistencia.db');
+// Configuración de la base de datos (Ruta Unificada)
+let homeDir;
+if (process.env.APPDATA) {
+    homeDir = process.env.APPDATA;
+} else {
+    homeDir = process.platform === 'darwin' 
+        ? path.join(process.env.HOME, 'Library', 'Preferences') 
+        : path.join(process.env.HOME, '.local', 'share');
+}
+
+const dbFolder = path.join(homeDir, 'asistencia-mep');
+const SQLITE_DB_PATH = path.join(dbFolder, 'asistencia.db');
+
+// Asegurar que el directorio existe
+if (!fs.existsSync(dbFolder)) {
+    fs.mkdirSync(dbFolder, { recursive: true });
+}
 
 // NOTA: secciones, docentes y estudiantes se migran de forma especial (con remapeo de IDs)
 // estados_asistencia se maneja localmente y no se migra.
