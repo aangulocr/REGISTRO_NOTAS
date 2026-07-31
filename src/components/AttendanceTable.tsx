@@ -311,10 +311,11 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
                                         <div
                                             onClick={() => handleGeneralToggle(est.cedula)}
                                             style={{
-                                                width: '60px',
-                                                height: '28px',
-                                                background: leccionesTotales === 0 ? 'rgba(255,255,255,0.02)' : (isPresent ? 'var(--primary)' : 'rgba(255,255,255,0.1)'),
-                                                borderRadius: '14px',
+                                                width: '80px',
+                                                height: '44px',
+                                                background: leccionesTotales === 0 ? 'rgba(0,0,0,0.02)' : (isPresent ? 'var(--primary)' : 'rgba(0,0,0,0.08)'),
+                                                border: '1px solid var(--glass-border)',
+                                                borderRadius: '22px',
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 padding: '0 4px',
@@ -325,27 +326,29 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
                                             }}
                                         >
                                             <div style={{
-                                                width: '20px',
-                                                height: '20px',
+                                                width: '36px',
+                                                height: '36px',
                                                 background: 'white',
                                                 borderRadius: '50%',
-                                                transform: isPresent ? 'translateX(32px)' : 'translateX(0)',
+                                                transform: isPresent ? 'translateX(36px)' : 'translateX(0)',
                                                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
-                                                fontSize: '10px'
-                                            }}>{isPresent && leccionesTotales > 0 ? '✓' : ''}</div>
+                                                fontSize: '14px',
+                                                fontWeight: 'bold',
+                                                color: isPresent ? 'var(--primary)' : 'var(--danger)'
+                                            }}>{isPresent && leccionesTotales > 0 ? '✓' : '✗'}</div>
                                             <span style={{
                                                 position: 'absolute',
-                                                left: isPresent ? '8px' : '26px',
+                                                left: isPresent ? '10px' : '44px',
                                                 fontSize: '9px',
-                                                fontWeight: 700,
+                                                fontWeight: 800,
                                                 color: leccionesTotales === 0 ? 'var(--text-muted)' : (isPresent ? 'white' : 'var(--danger)'),
                                                 pointerEvents: 'none'
                                             }}>
-                                                {leccionesTotales === 0 ? 'N/A' : (isPresent ? 'PRES' : 'AUSEN')}
+                                                {leccionesTotales === 0 ? 'N/A' : (isPresent ? 'PRES' : 'AUS')}
                                             </span>
                                         </div>
                                     </td>
@@ -359,15 +362,19 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
                                             <button
                                                 onClick={() => handleLessonToggle(est.cedula, idx)}
                                                 style={{
-                                                    padding: '0.4rem 0.8rem',
+                                                    padding: '0.5rem 0.75rem',
                                                     borderRadius: '8px',
-                                                    background: 'rgba(255,255,255,0.05)',
-                                                    border: `1px solid ${lessonColors[currentLessons[idx]]}44`,
+                                                    background: 'rgba(0,0,0,0.02)',
+                                                    border: `1px solid ${lessonColors[currentLessons[idx]]}55`,
                                                     color: lessonColors[currentLessons[idx]],
-                                                    fontSize: '0.85rem',
-                                                    fontWeight: 700,
+                                                    fontSize: '0.9rem',
+                                                    fontWeight: 800,
                                                     cursor: 'pointer',
-                                                    minWidth: '40px',
+                                                    minWidth: '44px',
+                                                    minHeight: '44px',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
                                                     transition: 'all 0.2s'
                                                 }}
                                             >
@@ -381,7 +388,7 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
                     </tbody>
                 </table>
 
-                <footer style={{ padding: '1.2rem 1.5rem', background: 'rgba(255,255,255,0.02)', borderTop: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <footer style={{ padding: '1.2rem 1.5rem', background: 'rgba(0,0,0,0.01)', borderTop: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                         Mostrando <strong>{estudiantes.length}</strong> estudiantes de la sección.
                     </div>
@@ -405,11 +412,6 @@ export function AttendanceTable({ seccionId, fecha, periodo, onSave }: Props) {
                     </div>
                 </footer>
             </div>
-        </div>
-    );
-}
-
-v>
         </div>
     );
 }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { sqliteService } from '../lib/sqliteService';
 import { useToast } from './Toast';
 import { CotidianoSummary } from './CotidianoSummary';
+import { formatDateToLocal } from '../lib/utils';
 
 interface Trabajo {
     id: number;
@@ -290,10 +291,12 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
         setIsSaving(true);
         try {
             // 1. Insertar trabajo y obtener su ID
+            const localDate = new Date().toLocaleDateString('en-CA');
             const { data: nuevoTrabajo, error: tcError } = await sqliteService.from('trabajos_cotidianos').insertReturning({
                 nombre: editNombre,
                 seccion_id: selectedSeccion,
-                periodo: periodo
+                periodo: periodo,
+                fecha: localDate
             });
             if (tcError || !nuevoTrabajo) throw new Error(tcError || 'No se pudo crear el trabajo');
 
@@ -350,9 +353,9 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                         value={selectedSeccion}
                         onChange={e => setSelectedSeccion(e.target.value)}
                         className="glass-card"
-                        style={{ padding: '0.75rem 1rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: 'none' }}
+                        style={{ height: '44px', padding: '0.5rem 1rem', background: 'rgba(0,0,0,0.02)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', outline: 'none' }}
                     >
-                        {secciones.map(s => <option key={s.id} value={s.id} style={{ background: '#1e1b4b' }}>{s.nombre}</option>)}
+                        {secciones.map(s => <option key={s.id} value={s.id} style={{ background: 'var(--glass-bg)', color: 'var(--text-main)' }}>{s.nombre}</option>)}
                     </select>
                     <button onClick={() => setShowSummary(true)} className="btn-primary" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid var(--glass-border)' }}>
                         📊 Resumen de Notas
@@ -373,9 +376,9 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                                     value={selectedTrabajo}
                                     onChange={e => setSelectedTrabajo(e.target.value)}
                                     className="glass-card"
-                                    style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: 'none' }}
+                                    style={{ height: '44px', padding: '0.5rem 1rem', background: 'rgba(0,0,0,0.02)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', outline: 'none' }}
                                 >
-                                    {trabajos.map(t => <option key={t.id} value={t.id} style={{ background: '#1e1b4b' }}>{t.nombre}</option>)}
+                                    {trabajos.map(t => <option key={t.id} value={t.id} style={{ background: 'var(--glass-bg)', color: 'var(--text-main)' }}>{t.nombre} ({formatDateToLocal((t as any).fecha)})</option>)}
                                     {trabajos.length === 0 && <option value="">No hay trabajos creados</option>}
                                 </select>
                             </div>
@@ -410,8 +413,8 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                         <div className="glass-card" style={{ overflowX: 'auto', padding: '0' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
-                                    <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--glass-border)' }}>
-                                        <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)', position: 'sticky', left: 0, zIndex: 10, background: '#111827', minWidth: '200px' }}>Estudiante</th>
+                                    <tr style={{ background: 'rgba(0,0,0,0.01)', borderBottom: '1px solid var(--glass-border)' }}>
+                                        <th style={{ textAlign: 'left', padding: '0.75rem 1rem', fontSize: '0.8rem', color: 'var(--text-muted)', position: 'sticky', left: 0, zIndex: 10, background: 'var(--glass-bg)', minWidth: '200px' }}>Estudiante</th>
                                         <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}>M/M</th>
                                         {indicadores.map((ind, idx) => (
                                             <th key={ind.id} style={{ textAlign: 'center', padding: '0.5rem 0.2rem', fontSize: '0.7rem', width: '45px', minWidth: '45px', maxWidth: '45px' }} title={ind.titulo}>
@@ -421,7 +424,7 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                                                 </div>
                                             </th>
                                         ))}
-                                        <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.7rem', color: '#facc15', fontWeight: 700 }}>NOTA FINAL</th>
+                                        <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.7rem', color: '#ca8a04', fontWeight: 700 }}>NOTA FINAL</th>
                                         <th style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>CALIF.</th>
                                     </tr>
                                 </thead>
@@ -434,17 +437,17 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                                         const notaDirecta = notasFinalesDirectas[est.cedula] ?? '';
                                         const tieneNotaDirecta = notaDirecta !== '';
                                         return (
-                                            <tr key={est.cedula} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: tieneNotaDirecta ? 'rgba(250,204,21,0.03)' : 'transparent' }}>
-                                                <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', position: 'sticky', left: 0, zIndex: 5, background: tieneNotaDirecta ? '#1a180e' : '#111827', whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,0.05)' }}>
+                                            <tr key={est.cedula} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: tieneNotaDirecta ? 'rgba(250,204,21,0.05)' : 'transparent' }}>
+                                                <td style={{ padding: '0.75rem 1rem', fontSize: '0.85rem', position: 'sticky', left: 0, zIndex: 5, background: tieneNotaDirecta ? '#fef9c3' : 'var(--glass-bg)', color: 'var(--text-main)', whiteSpace: 'nowrap', borderRight: '1px solid rgba(0,0,0,0.05)' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                        <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem' }}>{initials}</div>
+                                                        <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', color: 'var(--text-muted)' }}>{initials}</div>
                                                         <div>{est.nombre} {est.apellidos}</div>
                                                     </div>
                                                 </td>
                                                 <td style={{ textAlign: 'center', padding: '0.25rem' }}>
                                                     <button
                                                         onClick={() => handleToggleAllScores(est.cedula)}
-                                                        style={{ fontSize: '8px', padding: '4px 6px', borderRadius: '6px', background: allAreThree ? 'var(--danger)' : 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                                        style={{ fontSize: '10px', minHeight: '44px', padding: '0.25rem 0.5rem', borderRadius: '8px', background: allAreThree ? 'var(--danger)' : 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
                                                     >
                                                         {allAreThree ? 'MIN' : 'MAX'}
                                                     </button>
@@ -461,15 +464,15 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                                                                 onChange={e => handleScoreChange(est.cedula, ind.id, e.target.value)}
                                                                 title={`${ind.titulo} (0-3)`}
                                                                 style={{
-                                                                    width: '38px',
+                                                                    width: '48px',
+                                                                    height: '44px',
                                                                     textAlign: 'center',
-                                                                    background: 'rgba(255,255,255,0.07)',
-                                                                    border: '1px solid rgba(99,102,241,0.3)',
-                                                                    borderRadius: '6px',
-                                                                    color: 'white',
-                                                                    fontSize: '0.85rem',
+                                                                    background: 'rgba(0,0,0,0.03)',
+                                                                    border: '1px solid var(--glass-border)',
+                                                                    borderRadius: '8px',
+                                                                    color: 'var(--text-main)',
+                                                                    fontSize: '1rem',
                                                                     fontWeight: 700,
-                                                                    padding: '4px 0',
                                                                     outline: 'none'
                                                                 }}
                                                             />
@@ -486,15 +489,15 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                                                         onChange={e => handleNotaFinalDirecta(est.cedula, e.target.value)}
                                                         title="Nota Final Directa (sobreescribe rúbrica)"
                                                         style={{
-                                                            width: '46px',
+                                                            width: '54px',
+                                                            height: '44px',
                                                             textAlign: 'center',
-                                                            background: tieneNotaDirecta ? 'rgba(250,204,21,0.15)' : 'rgba(255,255,255,0.05)',
-                                                            border: `1px solid ${tieneNotaDirecta ? '#facc15' : 'rgba(255,255,255,0.1)'}`,
-                                                            borderRadius: '6px',
-                                                            color: tieneNotaDirecta ? '#facc15' : 'var(--text-muted)',
-                                                            fontSize: '0.85rem',
+                                                            background: tieneNotaDirecta ? 'rgba(250,204,21,0.15)' : 'rgba(0,0,0,0.03)',
+                                                            border: `1px solid ${tieneNotaDirecta ? '#ca8a04' : 'var(--glass-border)'}`,
+                                                            borderRadius: '8px',
+                                                            color: tieneNotaDirecta ? '#ca8a04' : 'var(--text-main)',
+                                                            fontSize: '1rem',
                                                             fontWeight: 700,
-                                                            padding: '4px 0',
                                                             outline: 'none'
                                                         }}
                                                     />
@@ -514,7 +517,7 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                 <div className="manager-view glass-card" style={{ padding: '2rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                         <h2>Configurar Rúbrica de Trabajo Cotidiano</h2>
-                        <button onClick={() => setShowManager(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>✕ Cancelar</button>
+                        <button onClick={() => setShowManager(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold' }}>✕ Cancelar</button>
                     </div>
 
                     <div style={{ marginBottom: '2rem' }}>
@@ -524,14 +527,14 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                             value={editNombre}
                             onChange={e => setEditNombre(e.target.value)}
                             className="glass-card"
-                            style={{ width: '100%', padding: '1rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: 'none' }}
+                            style={{ width: '100%', height: '44px', padding: '0.75rem 1rem', background: 'rgba(0,0,0,0.02)', color: 'var(--text-main)', border: '1px solid var(--glass-border)' }}
                             placeholder="Nombre descriptivo..."
                         />
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                         {editIndicadores.map((ind, idx) => (
-                            <div key={idx} className="glass-card" style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.02)' }}>
+                            <div key={idx} className="glass-card" style={{ padding: '1.5rem', background: 'rgba(0,0,0,0.01)' }}>
                                 <div style={{ marginBottom: '1rem', fontWeight: 600, color: 'var(--primary)' }}>Indicador I{idx + 1}</div>
                                 <input
                                     type="text"
@@ -539,24 +542,24 @@ export const TrabajoCotidianoPage: React.FC<Props> = ({ periodo }) => {
                                     value={ind.titulo}
                                     onChange={e => { const n = [...editIndicadores]; n[idx].titulo = e.target.value; setEditIndicadores(n); }}
                                     className="glass-card"
-                                    style={{ width: '100%', padding: '0.75rem', marginBottom: '1rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: 'none' }}
+                                    style={{ width: '100%', height: '44px', padding: '0.75rem', marginBottom: '1rem', background: 'rgba(0,0,0,0.02)', color: 'var(--text-main)', border: '1px solid var(--glass-border)' }}
                                 />
                                 <div className="grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
                                     <div>
                                         <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>0 - No presenta evidencia</label>
-                                        <textarea value={ind.d0} onChange={e => { const n = [...editIndicadores]; n[idx].d0 = e.target.value; setEditIndicadores(n); }} className="glass-card" style={{ width: '100%', height: '60px', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', color: 'white', border: 'none', fontSize: '0.8rem' }} />
+                                        <textarea value={ind.d0} onChange={e => { const n = [...editIndicadores]; n[idx].d0 = e.target.value; setEditIndicadores(n); }} className="glass-card" style={{ width: '100%', height: '60px', padding: '0.5rem', background: 'rgba(0,0,0,0.02)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', fontSize: '0.8rem' }} />
                                     </div>
                                     <div>
                                         <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>1 - Aún no logrado (Reconoce...)</label>
-                                        <textarea value={ind.d1} onChange={e => { const n = [...editIndicadores]; n[idx].d1 = e.target.value; setEditIndicadores(n); }} className="glass-card" style={{ width: '100%', height: '60px', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', color: 'white', border: 'none', fontSize: '0.8rem' }} />
+                                        <textarea value={ind.d1} onChange={e => { const n = [...editIndicadores]; n[idx].d1 = e.target.value; setEditIndicadores(n); }} className="glass-card" style={{ width: '100%', height: '60px', padding: '0.5rem', background: 'rgba(0,0,0,0.02)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', fontSize: '0.8rem' }} />
                                     </div>
                                     <div>
                                         <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>2 - En proceso (Infiere...)</label>
-                                        <textarea value={ind.d2} onChange={e => { const n = [...editIndicadores]; n[idx].d2 = e.target.value; setEditIndicadores(n); }} className="glass-card" style={{ width: '100%', height: '60px', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', color: 'white', border: 'none', fontSize: '0.8rem' }} />
+                                        <textarea value={ind.d2} onChange={e => { const n = [...editIndicadores]; n[idx].d2 = e.target.value; setEditIndicadores(n); }} className="glass-card" style={{ width: '100%', height: '60px', padding: '0.5rem', background: 'rgba(0,0,0,0.02)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', fontSize: '0.8rem' }} />
                                     </div>
                                     <div>
                                         <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>3 - Logrado (Aplica...)</label>
-                                        <textarea value={ind.d3} onChange={e => { const n = [...editIndicadores]; n[idx].d3 = e.target.value; setEditIndicadores(n); }} className="glass-card" style={{ width: '100%', height: '60px', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', color: 'white', border: 'none', fontSize: '0.8rem' }} />
+                                        <textarea value={ind.d3} onChange={e => { const n = [...editIndicadores]; n[idx].d3 = e.target.value; setEditIndicadores(n); }} className="glass-card" style={{ width: '100%', height: '60px', padding: '0.5rem', background: 'rgba(0,0,0,0.02)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', fontSize: '0.8rem' }} />
                                     </div>
                                 </div>
                             </div>

@@ -111,7 +111,7 @@ export const ExamenSummary: React.FC<ExamenSummaryProps> = ({ seccionId, periodo
 
     return (
         <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '2rem' }}>
-            <div className="glass-card" style={{ width: '100%', maxWidth: '1000px', maxHeight: '90vh', overflow: 'auto', padding: '2rem', position: 'relative', background: '#1e1b4b' }}>
+            <div className="glass-card" style={{ width: '100%', maxWidth: '1000px', maxHeight: '90vh', overflow: 'auto', padding: '2rem', position: 'relative', background: 'var(--glass-bg)', color: 'var(--text-main)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }} className="no-print">
                     <h2 style={{ margin: 0 }}>Resumen de Exámenes - {seccionName} - Sem {periodo}</h2>
                     <div style={{ display: 'flex', gap: '1rem' }}>

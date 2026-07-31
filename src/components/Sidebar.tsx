@@ -45,24 +45,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, currentView, onView
                     gap: '0.75rem',
                     padding: '0.85rem 1rem',
                     borderRadius: '12px',
-                    color: currentView === item.id ? 'var(--primary)' : 'white',
+                    color: currentView === item.id ? 'var(--primary)' : 'var(--text-muted)',
                     transition: 'all 0.3s ease'
                 }}
             >
                 <span className="nav-icon" style={{ fontSize: '1.2rem' }}>{item.icon}</span>
-                <span className="nav-label" style={{ fontWeight: 500 }}>{item.label}</span>
+                <span className="nav-label" style={{ fontWeight: 600 }}>{item.label}</span>
             </button>
         );
     };
 
     return (
-        <aside className={`sidebar glass-card ${className || ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
+        <aside className={`sidebar glass-card ${className || ''}`} style={{ display: 'flex', flexDirection: 'column', background: 'var(--glass-bg)', borderRight: '1px solid var(--glass-border)' }}>
             <div className="sidebar-header" style={{ padding: '1.5rem 1rem' }}>
                 <div className="logo">
                     <span className="logo-icon" style={{ fontSize: '1.8rem' }}>📋</span>
                     <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-                        <span className="logo-text" style={{ fontSize: '1rem', fontWeight: 800, background: 'linear-gradient(135deg, #fff 0%, #a5b4fc 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Registro Notas</span>
-                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em' }}>MEP 2026</span>
+                        <span className="logo-text" style={{ fontSize: '1.1rem', fontWeight: 800, background: 'linear-gradient(135deg, var(--primary) 0%, #1d4ed8 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Registro Notas</span>
+                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em' }}>MEP 2026</span>
                     </div>
                 </div>
             </div>
@@ -71,7 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, currentView, onView
                 <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', paddingLeft: '1rem' }}>
                     Periodo Académico
                 </div>
-                <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', padding: '0.25rem', borderRadius: '10px', gap: '0.25rem' }}>
+                <div style={{ display: 'flex', background: 'rgba(0,0,0,0.03)', padding: '0.25rem', borderRadius: '10px', gap: '0.25rem', border: '1px solid var(--glass-border)' }}>
                     {[1, 2].map(p => (
                         <button
                             key={p}
@@ -82,9 +82,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ className, currentView, onView
                                 borderRadius: '8px',
                                 background: periodo === p ? 'var(--primary)' : 'transparent',
                                 border: 'none',
-                                color: 'white',
+                                color: periodo === p ? 'white' : 'var(--text-main)',
                                 fontSize: '0.8rem',
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 cursor: 'pointer',
                                 transition: 'all 0.2s ease'
                             }}

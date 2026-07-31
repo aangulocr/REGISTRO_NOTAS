@@ -28,45 +28,38 @@ export function Dashboard({ seccionId, periodo }: Props) {
 
         // 2. Get attendance records with JOIN
         const { data: attendanceData } = await sqliteService.query(
-            `SELECT ca.fecha, ca.estado_id, ea.peso_ausencia 
+            `SELECT ca.fecha, ca.estudiante_id, ca.estado_id, ea.peso_ausencia, ea.es_justificada 
              FROM control_asistencia ca 
              JOIN estados_asistencia ea ON ca.estado_id = ea.id 
              WHERE ca.seccion_id = ? AND ca.periodo = ?`,
             [seccionId, periodo]
         );
 
-        // 3. Get daily configurations
-        const { data: configData } = await sqliteService.query(
-            'SELECT fecha, lecciones_totales FROM configuracion_diaria WHERE seccion_id = ? AND periodo = ?',
-            [seccionId, periodo]
-        );
-
-        const configMap: Record<string, number> = {};
-        configData?.forEach((c: any) => {
-            configMap[c.fecha] = c.lecciones_totales;
-        });
-
         // Calculate unique dates with records to get "Total Programmed Lessons"
         const typedAttendance = attendanceData as any[] | null;
         const uniqueDates = Array.from(new Set(typedAttendance?.map(a => a.fecha) || []));
-        let leccionesProgramadas = 0;
-        uniqueDates.forEach(date => {
-            leccionesProgramadas += configMap[date] || 4;
-        });
+        const leccionesProgramadas = uniqueDates.length * 4;
 
         // Calculate absenteeism weight per student
         const studentWeights: Record<string, number> = {};
+        
+        // Initialize weights for all students to make sure they are included
+        const { data: allEsts } = await sqliteService.query(
+            'SELECT cedula FROM estudiantes WHERE seccion_id = ?',
+            [seccionId]
+        );
+        (allEsts || []).forEach((e: any) => {
+            studentWeights[e.cedula] = 0;
+        });
+
         typedAttendance?.forEach((r: any) => {
-            if (!studentWeights[r.estudiante_id]) studentWeights[r.estudiante_id] = 0;
-            
-            const lessonsToday = configMap[r.fecha] || 4;
-            let peso = r.peso_ausencia || 0;
-            if (peso > 0) {
-                // Scale weight proportionally to today's lessons
-                if (lessonsToday < 4) {
-                    peso = (peso / 4) * lessonsToday;
+            if (!r.es_justificada) {
+                const peso = r.peso_ausencia || 0;
+                if (studentWeights[r.estudiante_id] !== undefined) {
+                    studentWeights[r.estudiante_id] += peso;
+                } else {
+                    studentWeights[r.estudiante_id] = peso;
                 }
-                studentWeights[r.estudiante_id] += peso;
             }
         });
 

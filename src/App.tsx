@@ -16,6 +16,8 @@ import { TareasPage } from './components/TareasPage';
 import { ExamenesPage } from './components/ExamenesPage';
 import { FinalReportPage } from './components/FinalReportPage';
 
+import { getInitialDate2026, formatDateToLocal, getInitialPeriodo, getPeriodoForDate } from './lib/utils';
+
 interface Seccion {
     id: string;
     nombre: string;
@@ -30,14 +32,11 @@ function App() {
     const [selectedNivel, setSelectedNivel] = useState<number>(10);
     const today = new Date().toLocaleDateString('en-CA');
     const maxDate = today < '2026-11-30' ? today : '2026-11-30';
-    const initialDate = today >= '2026-02-02' && today <= '2026-11-30' ? today : '2026-02-02';
-    const [selectedDate, setSelectedDate] = useState<string>(initialDate);
-    const [periodo, setPeriodo] = useState<number>(1);
+    const [selectedDate, setSelectedDate] = useState<string>(getInitialDate2026());
+    const [periodo, setPeriodo] = useState<number>(getInitialPeriodo());
     const [showReport, setShowReport] = useState(false);
     const [showAttendanceSummary, setShowAttendanceSummary] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
-
-
 
     useEffect(() => {
         fetchSecciones();
@@ -60,9 +59,16 @@ function App() {
         }
     }, [selectedNivel, secciones]);
 
+    // Auto-sincronizar semestre al cambiar la fecha seleccionada
+    useEffect(() => {
+        if (selectedDate) {
+            setPeriodo(getPeriodoForDate(selectedDate));
+        }
+    }, [selectedDate]);
+
     const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const date = new Date(e.target.value);
-        const day = date.getUTCDay();
+        const date = new Date(e.target.value + 'T00:00:00');
+        const day = date.getDay(); // 0 = Domingo, 6 = Sábado
         if (day === 0 || day === 6) {
             alert('Por favor selecciona un día entre lunes y viernes.');
             setRefreshKey(prev => prev + 1); // Reset input if invalid
@@ -132,9 +138,10 @@ function App() {
                                                 style={{
                                                     width: '100%',
                                                     padding: '0.75rem',
-                                                    background: 'rgba(255,255,255,0.05)',
-                                                    color: 'white',
-                                                    border: 'none',
+                                                    background: 'rgba(0,0,0,0.02)',
+                                                    color: 'var(--text-main)',
+                                                    border: '1px solid var(--glass-border)',
+                                                    borderRadius: '8px',
                                                     outline: 'none'
                                                 }}
                                             />
@@ -142,7 +149,7 @@ function App() {
 
                                         <div style={{ marginBottom: '1.5rem' }}>
                                             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Nivel Educativo</label>
-                                            <div style={{ display: 'flex', gap: '1rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: '8px' }}>
+                                            <div style={{ display: 'flex', gap: '1rem', background: 'rgba(0,0,0,0.02)', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
                                                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
                                                     <input
                                                         type="radio"
@@ -175,9 +182,11 @@ function App() {
                                                             onClick={() => setSelectedSeccion(s.id)}
                                                             className="btn-primary"
                                                             style={{
-                                                                background: selectedSeccion === s.id ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+                                                                background: selectedSeccion === s.id ? 'var(--primary)' : 'rgba(0,0,0,0.03)',
+                                                                color: selectedSeccion === s.id ? 'white' : 'var(--text-main)',
                                                                 textAlign: 'left',
                                                                 padding: '0.75rem',
+                                                                border: selectedSeccion === s.id ? 'none' : '1px solid var(--glass-border)',
                                                                 flex: 1
                                                             }}
                                                         >
@@ -215,7 +224,8 @@ function App() {
                                             style={{
                                                 width: '100%',
                                                 marginTop: '2rem',
-                                                background: 'rgba(255,255,255,0.1)',
+                                                background: 'rgba(0,0,0,0.03)',
+                                                color: 'var(--text-main)',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
@@ -232,7 +242,7 @@ function App() {
                                             style={{
                                                 width: '100%',
                                                 marginTop: '1rem',
-                                                background: 'rgba(99, 102, 241, 0.1)',
+                                                background: 'rgba(0, 86, 179, 0.1)',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
@@ -256,7 +266,7 @@ function App() {
                                                 </h2>
                                                 <div style={{ textAlign: 'right' }}>
                                                     <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Lista de Estudiantes</div>
-                                                    <div style={{ fontWeight: 600 }}>{selectedDate}</div>
+                                                    <div style={{ fontWeight: 600 }}>{formatDateToLocal(selectedDate)}</div>
                                                 </div>
                                             </div>
 

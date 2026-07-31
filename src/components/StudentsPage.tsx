@@ -251,7 +251,7 @@ export const StudentsPage: React.FC = () => {
                                 value={newCedula}
                                 onChange={e => setNewCedula(e.target.value)}
                                 className="glass-card"
-                                style={{ width: '100%', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: 'none' }}
+                                style={{ width: '100%', height: '44px', padding: '0.75rem', background: 'rgba(0,0,0,0.02)', color: 'var(--text-main)', border: '1px solid var(--glass-border)' }}
                             />
                         </div>
                         <div>
@@ -262,7 +262,7 @@ export const StudentsPage: React.FC = () => {
                                 value={newNombre}
                                 onChange={e => setNewNombre(e.target.value)}
                                 className="glass-card"
-                                style={{ width: '100%', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: 'none' }}
+                                style={{ width: '100%', height: '44px', padding: '0.75rem', background: 'rgba(0,0,0,0.02)', color: 'var(--text-main)', border: '1px solid var(--glass-border)' }}
                             />
                         </div>
                         <div>
@@ -273,10 +273,10 @@ export const StudentsPage: React.FC = () => {
                                 value={newApellidos}
                                 onChange={e => setNewApellidos(e.target.value)}
                                 className="glass-card"
-                                style={{ width: '100%', padding: '0.75rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: 'none' }}
+                                style={{ width: '100%', height: '44px', padding: '0.75rem', background: 'rgba(0,0,0,0.02)', color: 'var(--text-main)', border: '1px solid var(--glass-border)' }}
                             />
                         </div>
-                        <button type="submit" className="btn-primary" style={{ marginTop: '1rem' }}>
+                        <button type="submit" className="btn-primary" style={{ marginTop: '1rem', minHeight: '44px' }}>
                             ➕ Agregar Estudiante
                         </button>
                     </form>
@@ -289,10 +289,10 @@ export const StudentsPage: React.FC = () => {
                             value={selectedSeccion}
                             onChange={e => setSelectedSeccion(e.target.value)}
                             className="glass-card"
-                            style={{ padding: '0.5rem 1rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: 'none', outline: 'none' }}
+                            style={{ height: '44px', padding: '0.5rem 1rem', background: 'rgba(0,0,0,0.02)', color: 'var(--text-main)', border: '1px solid var(--glass-border)', outline: 'none' }}
                         >
                             {secciones.map(s => (
-                                <option key={s.id} value={s.id} style={{ background: '#1e1b4b' }}>{s.nombre}</option>
+                                <option key={s.id} value={s.id} style={{ background: 'var(--glass-bg)', color: 'var(--text-main)' }}>{s.nombre}</option>
                             ))}
                         </select>
                     </div>

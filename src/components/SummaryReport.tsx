@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { sqliteService } from '../lib/sqliteService';
+import { formatDateToLocal } from '../lib/utils';
 
 interface Props {
     seccionId: string;
@@ -46,7 +47,7 @@ export function SummaryReport({ seccionId, periodo, onClose }: Props) {
             // 2. Asistencia con JOIN a estados_asistencia
             const { data: attendanceData } = await sqliteService.query(
                 `SELECT ca.estudiante_id, ca.fecha, ca.estado_id,
-                        ea.nombre AS estado_nombre, ea.peso_ausencia
+                        ea.nombre AS estado_nombre, ea.peso_ausencia, ea.es_justificada
                  FROM control_asistencia ca
                  JOIN estados_asistencia ea ON ca.estado_id = ea.id
                  WHERE ca.seccion_id = ? AND ca.periodo = ?`,
@@ -54,24 +55,11 @@ export function SummaryReport({ seccionId, periodo, onClose }: Props) {
             );
             const attendance = attendanceData as any[] || [];
 
-            // 3. Configuración de lecciones
-            const { data: configData } = await sqliteService.query(
-                'SELECT fecha, lecciones_totales FROM configuracion_diaria WHERE seccion_id = ? AND periodo = ?',
-                [seccionId, periodo]
-            );
-            const config = configData as any[] || [];
-
-            const configMap: Record<string, number> = {};
-            config.forEach(c => configMap[c.fecha] = c.lecciones_totales);
-
-            // Lecciones programadas globales de la sección en este período
+            // Lecciones programadas globales de la sección en este período (fechas con asistencia * 4)
             const uniqueDates = Array.from(new Set(attendance.map(a => a.fecha)));
-            let globalLeccionesProgramadas = 0;
-            uniqueDates.forEach(date => {
-                globalLeccionesProgramadas += configMap[date] || 4;
-            });
+            const globalLeccionesProgramadas = uniqueDates.length * 4;
 
-            // 4. Calcular por estudiante
+            // 3. Calcular por estudiante
             const studentReports: StudentReport[] = students.map(student => {
                 const studentAttendance = attendance.filter(a => a.estudiante_id === student.cedula);
 
@@ -80,14 +68,10 @@ export function SummaryReport({ seccionId, periodo, onClose }: Props) {
 
                 studentAttendance.forEach((record: any) => {
                     if (!record.es_justificada) {
-                        const lessonsToday = configMap[record.fecha] || 4;
-                        let peso = record.peso_ausencia || 0;
+                        const peso = record.peso_ausencia || 0;
                         if (peso > 0) {
-                            if (lessonsToday < 4) {
-                                peso = (peso / 4) * lessonsToday;
-                            }
                             studentAbsenceWeight += peso;
-                            datesWithAbsence.push(`${record.fecha} (${record.estado_nombre})`);
+                            datesWithAbsence.push(`${formatDateToLocal(record.fecha)} (${record.estado_nombre})`);
                         }
                     }
                 });

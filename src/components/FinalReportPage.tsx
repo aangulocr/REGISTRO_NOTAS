@@ -204,20 +204,14 @@ export const FinalReportPage: React.FC<Props> = ({ periodo }) => {
 
                 // Asistencia (5%)
                 const studentAtt = (attData || []).filter((a: any) => a.estudiante_id === est.cedula && a.periodo === p);
-                const currentConfigs = (configData || []).filter((c: any) => c.periodo === p);
-                const uniqueDates = Array.from(new Set(currentConfigs.map((c: any) => c.fecha)));
-                let totalProgrammed = 0;
-                uniqueDates.forEach((d: any) => { totalProgrammed += configMap[`${d}-${p}`] || 4; });
+                const periodAtt = (attData || []).filter((a: any) => a.periodo === p);
+                const uniqueDates = Array.from(new Set(periodAtt.map((a: any) => a.fecha)));
+                const totalProgrammed = uniqueDates.length * 4;
 
                 let totalWeight = 0;
                 studentAtt.forEach((att: any) => {
                     if (!att.es_justificada) {
-                        const lessonsToday = configMap[`${att.fecha}-${p}`] || 4;
-                        let weight = att.peso_ausencia || 0;
-                        if (lessonsToday < 4 && weight > 0) {
-                            weight = (weight / 4) * lessonsToday;
-                        }
-                        totalWeight += weight;
+                        totalWeight += att.peso_ausencia || 0;
                     }
                 });
                 const flooredAbsences = Math.floor(totalWeight);

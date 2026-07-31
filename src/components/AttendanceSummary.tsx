@@ -43,23 +43,12 @@ export const AttendanceSummary: React.FC<AttendanceSummaryProps> = ({ seccionId,
                 [seccionId, periodo]
             );
 
-            // 4. Get Daily Configs
-            const { data: configData } = await sqliteService.query(
-                'SELECT fecha, lecciones_totales FROM configuracion_diaria WHERE seccion_id = ? AND periodo = ?',
-                [seccionId, periodo]
-            );
-            const configMap: Record<string, number> = {};
-            configData?.forEach((c: any) => { configMap[c.fecha] = c.lecciones_totales; });
-
-            // 5. Calculate stats per student
+            // 4. Calculate stats per student
             const newStats: any = {};
 
-            // First calculate total programmed lessons for the section
+            // Calculate total programmed lessons for the section
             const uniqueDates = Array.from(new Set((attendanceData || []).map((a: any) => a.fecha)));
-            let totalProgrammedLessons = 0;
-            uniqueDates.forEach((d: any) => {
-                totalProgrammedLessons += configMap[String(d)] || 4;
-            });
+            const totalProgrammedLessons = uniqueDates.length * 4;
 
             students.forEach((est: any) => {
                 const studentAttendance = (attendanceData || []).filter((a: any) => a.estudiante_id === est.cedula);
@@ -68,14 +57,7 @@ export const AttendanceSummary: React.FC<AttendanceSummaryProps> = ({ seccionId,
                 studentAttendance.forEach((att: any) => {
                     // Only count unjustified absences/tardies
                     if (!att.es_justificada) {
-                        const lessonsToday = configMap[att.fecha] || 4;
-                        let weight = att.peso_ausencia || 0;
-
-                        // Scale weight if lessons < 4
-                        if (lessonsToday < 4 && weight > 0) {
-                            weight = (weight / 4) * lessonsToday;
-                        }
-                        totalWeight += weight;
+                        totalWeight += att.peso_ausencia || 0;
                     }
                 });
 
